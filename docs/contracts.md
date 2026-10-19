@@ -32,3 +32,9 @@ Mock 버튼: `PythonBridge → mock_inference.infer → 고정 Mock 문자열`.
 
 카메라와 Python 사이의 프레임 전달, 실제 모델 추론, 모델 결과 변환, 상황 자동 선택, 자동 피드백은 구현하지 않는다.
 Mock 문자열을 실제 AI 결과로 취급하지 않는다. 계약 변경 시 이 문서와 AGENTS.md를 함께 수정한다.
+
+## 실제 서비스로 바꿀 때의 진입점
+현재 `PythonBridge.infer()`와 `PythonBridge.analyze(situation) → run_test()`는 테스트 전용 진입점이다.
+실제 추론 연결을 검증한 뒤 Mock 파일과 `run_test()`를 제거하고, Bridge는 실제 입력과 결과 전달을 담당하도록 수정한다.
+공통 처리의 `build_frame → analyze → 각 모듈의 analyze(frame_data)` 경로는 유지·구현한다.
+사용자의 시작 동작에서 이 경로를 호출할 실시간 처리 연결은 아직 없다. 버튼 전용 테스트는 제거·갱신하되 공통 모듈 호출 계약 검증은 유지한다.

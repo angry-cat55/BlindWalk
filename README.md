@@ -64,6 +64,21 @@ docs/contracts.md                  # 임시 입출력 계약
 이 흐름은 향후 목표이며 현재 카메라 영상은 Python이나 AI에 전달되지 않는다. 자동 안내도 구현하지 않았다.
 실제 모델 추론을 Kotlin/Python 중 어디서 실행할지는 모델 선정 후 결정한다.
 
+## 테스트 화면에서 실제 서비스로의 전환
+현재 일곱 버튼은 개발용이다. 최종 목표는 사용자가 시작을 누르면 카메라 인식·상황 판단·음성 및 진동 안내가 이어지는 서비스다. 시작/중지와 실시간 인식 연결은 아직 없다.
+
+| 파일·코드 | 향후 처리 |
+| --- | --- |
+| mock_inference.py | 실제 추론 연결 검증 후 삭제 |
+| CameraScreen.kt | 파일은 유지하고 테스트 버튼을 시작·중지·안내 화면으로 교체 |
+| PythonBridge.kt | 유지. Mock infer()·버튼용 analyze(situation)를 실제 데이터·결과 전달로 교체 |
+| frame_interface.py | 유지. 테스트용 run_test()는 삭제하고 build_frame → analyze로 연결 |
+| 네 Python 상황 모듈 | 유지하고 담당 판단 로직 구현 |
+| 카메라·진동·TTS | 유지·확장. Preview 외 프레임 분석 연결과 자동 안내는 추가 개발 필요 |
+
+현재 `버튼 → PythonBridge → run_test → 빈 상황 함수` 경로를 향후 `시작 → 카메라 프레임 → AI 추론 → build_frame → analyze → 상황 모듈 → 안내`로 바꾼다.
+PythonBridge 전체를 삭제하는 것이 아니라 테스트용 진입점을 실제 서비스 호출로 교체한다. 관련 테스트와 문서도 함께 갱신하며, 지금은 위 코드를 미리 삭제하지 않는다.
+
 ## 실행
 1. `git clone https://github.com/angry-cat55/BlindWalk.git` 실행 후 폴더를 Android Studio로 연다.
 2. **AGENTS.md를 먼저 읽고** docs/contracts.md의 계약을 확인한다.
