@@ -65,7 +65,7 @@ docs/contracts.md                  # 임시 입출력 계약
 실제 모델 추론을 Kotlin/Python 중 어디서 실행할지는 모델 선정 후 결정한다.
 
 ## 실행
-1. `git clone https://github.com/angry-cat55/PathSense.git` 실행 후 폴더를 Android Studio로 연다.
+1. `git clone https://github.com/angry-cat55/BlindWalk.git` 실행 후 폴더를 Android Studio로 연다.
 2. **AGENTS.md를 먼저 읽고** docs/contracts.md의 계약을 확인한다.
 3. SDK Manager에서 프로젝트가 요구하는 SDK 37을 설치하고 JDK 25를 준비한다.
 4. PC에 Python 3.14를 설치해 `py -3.14`(Windows) 또는 `python3.14`(macOS/Linux)로 실행 가능하게 한다. Chaquopy가 자동 탐색하므로 개인 경로는 코드에 적지 않는다.
