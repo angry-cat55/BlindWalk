@@ -1,4 +1,5 @@
 plugins {
+    alias(libs.plugins.chaquopy)
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
 }
@@ -15,6 +16,7 @@ android {
         targetSdk = 37
         versionCode = 1
         versionName = "1.0"
+        ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -33,6 +35,11 @@ android {
     buildFeatures {
         compose = true
     }
+}
+
+// Python 실행 환경만 포함한다. AI 모델·외부 Python 패키지는 추가하지 않는다.
+chaquopy {
+    defaultConfig { version = "3.14" }
 }
 
 dependencies {

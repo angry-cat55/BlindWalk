@@ -18,3 +18,7 @@ local.properties
 /.kotlin/
 *.jks
 *.keystore
+/.idea/
+__pycache__/
+*.py[cod]
+.venv/

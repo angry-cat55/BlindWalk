@@ -17,9 +17,7 @@ import androidx.core.content.ContextCompat
 import com.example.blindwalk.camera.CameraPreview
 import com.example.blindwalk.feedback.HapticFeedback
 import com.example.blindwalk.feedback.SpeechFeedback
-import com.example.blindwalk.inference.MockInferenceEngine
-import com.example.blindwalk.model.DetectionFrame
-import com.example.blindwalk.situation.*
+import com.example.blindwalk.bridge.PythonBridge
 
 // 카메라와 일곱 테스트 버튼을 표시하고 담당 모듈의 함수만 호출한다.
 @Composable
@@ -36,14 +34,13 @@ fun CameraScreen() {
         if (!granted) permission.launch(Manifest.permission.CAMERA)
     }
 
-    val mock = remember { MockInferenceEngine() }
-    val frame = remember { DetectionFrame() }
+    val python = remember { PythonBridge() }
     val analyzers = remember {
         listOf(
-            "점자블록 이상 판단" to TactileAnomalyAnalyzer(),
-            "점형블록 주변 분석" to TactileContextAnalyzer(),
-            "일반 보행 위험 판단" to WalkingHazardAnalyzer(),
-            "머리 높이 장애물 판단" to OverheadHazardAnalyzer()
+            "점자블록 이상 판단" to "TACTILE_ANOMALY",
+            "점형블록 주변 분석" to "TACTILE_CONTEXT",
+            "일반 보행 위험 판단" to "WALKING_HAZARD",
+            "머리 높이 장애물 판단" to "OVERHEAD_HAZARD"
         )
     }
     val haptic = remember(context) { HapticFeedback(context) }
@@ -64,10 +61,10 @@ fun CameraScreen() {
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             Text(message)
-            Button(onClick = { message = mock.infer() }) { Text("AI 인식 테스트") }
-            analyzers.forEach { (label, analyzer) ->
+            Button(onClick = { message = python.infer() }) { Text("AI 인식 테스트") }
+            analyzers.forEach { (label, situation) ->
                 Button(onClick = {
-                    analyzer.analyze(frame)
+                    python.analyze(situation)
                     message = "아직 구현되지 않은 기능입니다"
                 }) { Text(label) }
             }
