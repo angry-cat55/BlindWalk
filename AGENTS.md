@@ -5,6 +5,15 @@ ROKEY 부트캠프 스터디원 4명이 함께 개발하는 Android 온디바이
 모두가 AI 모델 학습, 추론 결과 분석, 상황 판단 로직 개발에 참여한다.
 현재 코드는 실제 AI 기능이 구현되지 않은 초기 Skeleton이다.
 
+## 최종적으로 만들 서비스
+스마트폰 카메라 영상에서 점자블록 및 보행 위험을 인식하고, 시각장애인에게 상황에 맞는 음성·진동 안내를 제공하는 온디바이스 시제품을 목표로 한다.
+점자블록 파손·가림·단절, 점형블록 주변 환경, 일반 보행 위험, 머리 높이 장애물의 네 상황을 다룬다. 서버·DB는 사용하지 않는다.
+Kotlin은 CameraX·Compose UI·권한·진동·TTS와 Python 연결을 담당하고, Python은 공통 AI 결과 처리와 상황 판단을 담당한다.
+목표 흐름은 `카메라 → 하나 이상의 AI 예측 → frame_interface.py → 해당 상황 모듈 → 판단 결과 → Kotlin 음성·진동 안내`이다.
+`frame_interface.py`는 같은 프레임의 예측을 공통 `objects`로 정리하고 `situations`를 결정한 뒤 해당 모듈을 직접 호출한다. 별도 situation_router.py는 만들지 않는다.
+세부 위험 판단은 담당 모듈에 둔다. 실제 모델 추론의 실행 언어와 엔진은 모델 선정 후 정하며, 동일 모델을 모듈마다 중복 실행하지 않는다.
+이것은 최종 목표 설명이다. 현재는 카메라 Preview와 테스트 버튼 연결만 구현하며, 공통 결과 변환·상황 자동 선택·위험 판단·자동 피드백은 TODO로 유지한다.
+
 ## AI 에이전트 작업 원칙
 1. 시작 전 AGENTS.md, README.md, docs/contracts.md를 읽는다.
 2. 기존 구조와 담당 모듈 역할을 먼저 파악한다.
@@ -24,10 +33,10 @@ ROKEY 부트캠프 스터디원 4명이 함께 개발하는 Android 온디바이
 취업·스펙 질문은 목표 직무와 지역의 최신 공식 JD와 기술 동향을 검색·인용하고 반복되는 핵심 역량을 중심으로 조언한다.
 
 ## 팀원별 담당 모듈
-- TactileAnomalyAnalyzer: 점자블록 이상 판단
-- TactileContextAnalyzer: 점형블록 주변 환경 분석
-- WalkingHazardAnalyzer: 일반 보행 위험 판단
-- OverheadHazardAnalyzer: 머리 높이 장애물 판단
+- app/src/main/python/tactile_anomaly.py: 점자블록 이상 판단
+- app/src/main/python/tactile_context.py: 점형블록 주변 환경 분석
+- app/src/main/python/walking_hazard.py: 일반 보행 위험 판단
+- app/src/main/python/overhead_hazard.py: 머리 높이 장애물 판단
 
 각 담당자는 자신의 기능을 구현하며 다른 팀원 모듈을 임의로 수정하지 않는다.
 공통 인터페이스나 다른 팀원 코드 수정이 필요하면 먼저 사용자에게 변경 내용과 영향을 설명한다.
@@ -39,8 +48,10 @@ ROKEY 부트캠프 스터디원 4명이 함께 개발하는 Android 온디바이
 모델 및 실행 구조가 미정이므로 현재 추론 프레임워크를 추가하지 않는다.
 
 ## 공통 데이터 계약
-모든 상황 판단 모듈은 SituationAnalyzer를 따른다.
-입력은 DetectionFrame, 반환은 List<RiskEvent>이다.
+모든 Python 상황 모듈은 `analyze(frame_data)` 함수를 따른다. 현재 함수 본문은 TODO와 `return []`만 작성한다.
+공통 입력은 `frame_id`, `objects`, `situations`를 가진 Python 딕셔너리이며 반환은 판단 결과 목록이다. 결과 항목의 필드는 아직 정하지 않는다.
+`situations`는 확정된 위험이 아니라 분석할 상황 종류의 목록이다. 현재 버튼 테스트에서만 호출 대상을 직접 지정하며 실제 AI 기반 선택은 구현하지 않는다.
+Kotlin의 PythonBridge는 호출과 결과 전달만 담당하고 판단 로직은 넣지 않는다. Kotlin의 별도 상황 인터페이스·모델 타입을 중복 유지하지 않는다.
 실제 모델 출력이 확정되면 공통 협의를 통해 변경할 수 있다.
 계약 변경 시 docs/contracts.md도 함께 수정한다.
 
@@ -58,6 +69,8 @@ ROKEY 부트캠프 스터디원 4명이 함께 개발하는 Android 온디바이
 기존 Android Studio 설정과 Gradle Wrapper를 유지한다.
 Gradle, AGP, Kotlin, JDK 버전 호환성을 유지하고 Version Catalog로 의존성을 관리한다.
 라이브러리나 빌드 설정 변경 시 이유를 설명한다.
+Python 실행에는 Chaquopy 17.1.0과 Python 3.14를 사용한다. 현재 CPU 대상은 arm64-v8a·x86_64이며 외부 Python 패키지는 설치하지 않는다.
+Python 담당자는 PC에서 표준 라이브러리만으로 테스트할 수 있게 Android 의존 코드를 상황 모듈에 넣지 않는다.
 개인 파일 경로, SDK 경로, 비밀 정보를 코드에 하드코딩하지 않는다.
 
 ## GitHub 협업
