@@ -1,5 +1,27 @@
 # Python 상황 판단의 임시 계약
 
+파일별 전체 흐름과 AI 담당자 연결 지점은 [AI 팀 공유 문서](ai-team-handoff.md)에 정리한다. 이 문서는 공통 데이터 계약의 기준이다.
+
+## 카메라→향후 AI 연결점 (AI 예측 전)
+본 앱의 `camera/CameraPreview.kt`가 `AiFrameInput.onFrameSelected(frameId: Long, image: ImageProxy)`를 분석 전용 스레드에서 동기 호출한다. 파일은 `app/src/main/java/com/example/blindwalk/camera/AiFrameInput.kt`다. 현재 함수 본문은 TODO이며 데이터를 Python으로 전송하지 않는다.
+
+| 전달 데이터 | 형식·의미 |
+| --- | --- |
+| frameId | Long, 선택된 프레임에만1씩 증가. 카메라 재시작 시1부터 시작 |
+| image | CameraX ImageProxy, 복사·모델 전처리하지 않은 원본 프레임 |
+| image.width/height | 원본 버퍼 크기. 모델 입력 크기가 아님 |
+| image.cropRect | 공통 ViewPort의 유효 촬영 영역 |
+| image.imageInfo.rotationDegrees | 원본을 올바른 방향으로 해석할 회전값(도) |
+| image.imageInfo.timestamp | 카메라 촬영 timestamp(ns). epoch시각으로 해석하지 않음 |
+| image.format / image.planes | 원본 포맷·Plane 버퍼·rowStride/pixelStride. 현재 CameraX 기본 YUV_420_888, 모델 색상 계약은 아님 |
+
+가로4:3은 cropRect 적용 후 rotationDegrees로 방향을 맞춘 유효 영상 기준이다. 버퍼 전체가 가로4:3이라고 가정하지 않는다. 크기 조절·RGB 변환·정규화·텐서화·Python 변환은 이번 범위에 없고 AI 담당자와 추후 결정한다.
+
+프레임 선택은 단조 시각 기준 최소200ms 간격(최대 약5장/초)이다. 지연 시 누락분을 몰아보내지 않는다. Preview30FPS는 별도 목표이며 AI 추론5FPS를 뜻하지 않는다.
+콜백이 반환되면 카메라가 반드시 image.close()한다. image·planes·ByteBuffer를 저장하거나 다른 스레드에서 나중에 읽지 않는다. 향후 비동기 추론이 필요하면 콜백 안에서 필요한 데이터의 소유 복사본을 만들고 단일 처리/최신 프레임 정책을 별도 설계한다. 지금은 복사나 큐를 추가하지 않는다.
+
+아래 Python frame_data는 **추론 후 예측 결과** 계약이며 위 카메라 원본 계약과 다르다.
+
 모델이 미정인 초기 Skeleton이다. 실제 AI 출력 구조·깊이 단위·판단 결과 항목은 추후 팀이 협의한다.
 
 ## 공통 입력
@@ -26,11 +48,11 @@ frame_data = {
 - 판단 결과: 현재 빈 목록. 항목의 필드는 미정이다. 빈 결과는 안전하다는 의미가 아니다.
 
 ## 호출 흐름
-현재: `테스트 버튼 → PythonBridge → run_test → 공통 입력 구성 → 해당 Python 모듈 → 빈 목록 → UI 미구현 안내`.
-Mock 버튼: `PythonBridge → mock_inference.infer → 고정 Mock 문자열`.
+보존된 테스트 함수: `PythonBridge → run_test → 공통 입력 구성 → 해당 Python 모듈 → 빈 목록`. 현재 UI에서는 호출하지 않는다.
+보존된 Mock 테스트 함수: `PythonBridge → mock_inference.infer → 고정 Mock 문자열`.
 목표: `카메라 → 하나 이상의 AI 예측 → build_frame → analyze → 해당 상황 모듈 → 결과 → Kotlin 음성·진동`.
 
-카메라와 Python 사이의 프레임 전달, 실제 모델 추론, 모델 결과 변환, 상황 자동 선택, 자동 피드백은 구현하지 않는다.
+현재 UI 흐름은 `메인 → 시작 → CameraX Preview + 원본 선택 → AiFrameInput TODO → 중지/뒤로 → 메인`이다. 카메라와 Python 사이의 프레임 전달, 실제 모델 추론, 모델 결과 변환, 상황 자동 선택, 자동 피드백은 구현하지 않는다.
 Mock 문자열을 실제 AI 결과로 취급하지 않는다. 계약 변경 시 이 문서와 AGENTS.md를 함께 수정한다.
 
 ## 실제 서비스로 바꿀 때의 진입점
