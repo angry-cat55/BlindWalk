@@ -22,27 +22,45 @@
 
 아래 Python frame_data는 **추론 후 예측 결과** 계약이며 위 카메라 원본 계약과 다르다.
 
-모델이 미정인 초기 Skeleton이다. 실제 AI 출력 구조·깊이 단위·판단 결과 항목은 추후 팀이 협의한다.
+AI 인지 파트의 공통 인터페이스 규약이다. 인스턴스 세그멘테이션과 MiDaS 단안 깊이 추정을 결합하여 각 객체의 위치(`bbox`), 외곽선(`contour`), 추정 거리(`distance_m`)를 제공한다.
 
 ## 공통 입력
 모든 상황 모듈은 `analyze(frame_data)`를 사용하고 Python 목록을 반환한다.
 
 ```python
+from detection import Detection
+
 frame_data = {
-    "frame_id": 0,
-    "objects": [],
-    "situations": [],
+    "frame_id": 1,
+    "objects": [
+        Detection(
+            id=1,
+            class_name="tactile_line",
+            confidence=0.92,
+            distance_m=1.2,
+            bbox=[100, 150, 250, 400],
+            contour=[[100, 150], [250, 150], [250, 400], [100, 400]],
+        ),
+        # ...
+    ],
+    "situations": ["TACTILE_ANOMALY", "WALKING_HAZARD"],
 }
 ```
 
-- `frame_id`: 같은 촬영 프레임의 예측을 묶는 식별자. 버튼 테스트에서는 0을 사용한다.
-- `objects`: 공통 객체 정보 목록. 향후 label·bbox·confidence·깊이 등을 정리할 예정이며 현재 항목 형식은 확정하지 않는다.
-- `situations`: 실행할 분석 종류 목록. 확정된 위험을 의미하지 않으며 여러 상황을 동시에 지정할 수 있다.
+- `frame_id`: 같은 촬영 프레임의 예측을 묶는 식별자. (1, 2, 3...)
+- `objects`: 검출된 `Detection` 객체들의 리스트 (`List[Detection]`).
+  - `id`: 프레임 내 객체 고유 번호 (1, 2, ...)
+  - `class_name`: 모델의 메타데이터(`model.names`)로부터 동적으로 인식된 클래스명. (기본 활성 16종: `tactile_line`, `tactile_dot`, `stairs`, `curb`, `caution_zone`, `bollard`, `barricade`, `pole`, `tree_trunk`, `bicycle`, `movable_signage`, `vehicle`, `person`, `traffic_light`, `facility`, `overhang`)
+  - `confidence`: 검출 신뢰도 (0.0 ~ 1.0)
+  - `distance_m`: 깊이 추정 AI(`depth.onnx`) 기반 미터(m) 단위 추정 거리
+  - `bbox`: 원본 4:3 픽셀 좌표계 기준 경계상자 `[x1, y1, x2, y2]` (전 객체 공통)
+  - `contour`: 외곽선 다각형 꼭짓점 좌표 목록 `[[x, y], [x, y], ...]` (세그멘테이션 마스크 보유 객체)
+- `situations`: 실행할 분석 종류 목록. 확정된 위험을 의미하지 않으며 여러 상황을 동시에 지정할 수 있다. (미정인 경우 빈 리스트)
 - 상황 이름: `TACTILE_ANOMALY`, `TACTILE_CONTEXT`, `WALKING_HAZARD`, `OVERHEAD_HAZARD`.
 
 ## 함수와 담당 범위
-- `frame_interface.build_frame(frame_id, model_results=None)`: 향후 하나 이상의 AI 결과를 objects로 정리하고 situations를 선택한다. 현재 model_results를 사용하지 않고 빈 입력만 반환한다.
-- `frame_interface.analyze(frame_data)`: situations에 지정된 모듈을 각각 호출하고 반환 목록을 합친다. 별도 라우터 파일은 없다.
+- `frame_interface.build_frame(frame_id, objects=None, situations=None)`: AI 결과(`List[Detection]`)를 받아 표준 `frame_data` 딕셔너리로 패키징한다.
+- `frame_interface.analyze(frame_data)`: situations에 지정된 모듈을 각각 호출하고 반환 목록을 합친다. 각 모듈은 `frame_data["objects"]`의 `Detection` 객체들을 검사하여 위험을 판단한다.
 - `frame_interface.run_test(situation)`: 버튼 연결 확인 전용. 빈 프레임에 상황 하나를 직접 지정한 뒤 analyze를 호출한다. AI 기반 상황 판단이 아니다.
 - 네 상황 모듈의 `analyze(frame_data)`: 현재 TODO와 `return []`만 있다. 향후 세부 위험 판단을 담당한다.
 - 판단 결과: 현재 빈 목록. 항목의 필드는 미정이다. 빈 결과는 안전하다는 의미가 아니다.
