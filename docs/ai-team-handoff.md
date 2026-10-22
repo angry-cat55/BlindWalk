@@ -85,52 +85,58 @@ Preview와 ImageAnalysis는 공통 `ViewPort(4:3)`를 사용한다.
 
 ```text
 AiFrameInput.onFrameSelected(frameId, image)
-  → 원본 영역·방향 해석
-  → 모델 입력 전처리 [크기/색상/정규화 미정]
-  → 공통 추론 계층 [실행 언어·엔진·파일명 미정]
-  → 하나 이상의 모델 예측 [동일 프레임 번호와 촬영 시각으로 대응]
+  → 4:3 원본 영역·방향 해석
+  → models/active/ 모델 기반 AI 파이프라인 (YOLO11n-seg + MiDaS Depth)
+  → 프레임 내 객체별 Detection 인스턴스 생성 (bbox, contour, distance_m, class_name)
   → app/src/main/python/frame_interface.py
-       build_frame(frame_id, model_results)
+       build_frame(frame_id, objects=[Detection, ...], situations=...)
   → 공통 Python dict {frame_id, objects, situations}
   → frame_interface.analyze(frame_data)
   → situations에 지정된 상황 모듈의 analyze(frame_data)
   → 판단 결과 목록
-  → Kotlin 음성/진동 안내 [결과 계약·연결 미구현]
+  → Kotlin 음성/진동 안내
 ```
 
-`frame_interface.py`는 **카메라 원본을 받는 파일이 아니라 추론 후 예측 결과를 정리할 파일**이다.
-현재 `build_frame`은 model_results를 변환하지 않고 빈 objects/situations를 만든다.
-`analyze`의 지정 모듈 호출 골격은 있지만 네 모듈은 아직 TODO와 `return []`뿐이다.
-동일 모델을 각 상황 모듈에서 중복 실행하지 않고 공통 추론 계층에서 실행할 계획이다.
+`frame_interface.py`는 **카메라 원본을 받는 파일이 아니라 추론 후 예측 결과(`Detection` 목록)를 정리할 파일**이다.
+`build_frame`은 `objects` (`List[Detection]`)를 받아 공통 `frame_data`를 구성한다.
+동일 모델을 각 상황 모듈에서 중복 실행하지 않고 공통 추론 계층에서 실행하여 `frame_data`로 공급한다.
 
 | Python 파일 (app/src/main/python/) | 향후 담당 |
 | --- | --- |
-| frame_interface.py | 같은 프레임의 예측을 공통 objects로 정리, 분석할 situations 선택·호출 |
+| detection.py | 표준 `Detection` 데이터클래스 (`id`, `class_name`, `confidence`, `distance_m`, `bbox`, `contour`) |
+| frame_interface.py | 같은 프레임의 예측(`objects`)을 정리, 분석할 situations 선택·호출 |
 | tactile_anomaly.py | 점자블록 파손·가림·단절 등 이상 판단 |
 | tactile_context.py | 점형블록 주변 계단·횡단보도·엘리베이터 등 분석 |
 | walking_hazard.py | 턱·계단·장애물·노면 위험 판단 |
 | overhead_hazard.py | 나뭇가지·돌출 간판 등 머리 높이 장애물 판단 |
 
-예정된 공통 결과의 현재 최소 형태:
+공통 결과의 표준 형태:
 
 ```python
+from detection import Detection
+
 frame_data = {
     "frame_id": 1,
-    "objects": [],
-    "situations": [],
+    "objects": [
+        Detection(
+            id=1,
+            class_name="stairs",
+            confidence=0.91,
+            distance_m=1.8,
+            bbox=[215, 306, 458, 471],
+            contour=[[215, 306], ...],
+        )
+    ],
+    "situations": ["TACTILE_ANOMALY", "WALKING_HAZARD"],
 }
 ```
 
-objects의 항목·bbox 좌표계·깊이 단위·판단 결과 항목은 아직 확정하지 않았다.
-`situations`는 확정된 위험이 아니라 **어떤 분석 모듈을 호출할지** 뜻한다.
-기존 `bridge/PythonBridge.kt`의 infer/analyze는 보존된 Mock/버튼 테스트용이며 현재 카메라 입력이나 실제 AI 실행과 연결되어 있지 않다.
+- `objects`: 모든 검출 객체는 `bbox`와 `contour`를 담으며, `depth.onnx`를 통해 추정한 `distance_m`을 가진다.
+- `situations`: 확정된 위험이 아니라 **어떤 분석 모듈을 호출할지** 뜻한다.
+- 모델 가중치는 `models/active/`에 등록되어 있으며, 클래스는 모델의 `model.names`에서 동적으로 로드된다.
 
 ## 7. AI 팀과 다음에 확정할 사항
 
-- 사용할 모델·가중치·실행 엔진·실행 언어(Kotlin 또는 Python).
-- 모델 입력 크기·색상 순서·정규화와 crop/회전/resize/letterbox 규칙.
-- 비동기 처리에 필요한 복사본의 형식·소유권·최신 프레임 정책.
-- 같은 촬영 프레임의 여러 모델 결과를 묶는 방법과 세션 재시작 식별 방법.
-- 공통 objects/bbox/깊이/판단 결과 계약. 확정되면 docs/contracts.md도 함께 수정한다.
-
-현재 원본 입력과 미래 AI 결과를 혼동하지 않는 것이 우선이다. 데이터 계약 변경은 팀과 협의한다.
+- 안드로이드 실기기(Kotlin/Chaquopy) 상에서의 실시간 프레임 버퍼 전달 및 TFLite/ONNX 실행 엔진 최종 융합
+- 각 4대 상황 판단 모듈(`tactile_anomaly`, `tactile_context`, `walking_hazard`, `overhead_hazard`)의 세부 판단 규칙 알고리즘 구현
+- 상황 판단 결과(`results`)의 세부 항목 명세 및 Kotlin TTS/진동 안내 연동 형식 확정
