@@ -49,8 +49,8 @@ frame_data = {
 
 - `frame_id`: 같은 촬영 프레임의 예측을 묶는 식별자. (1, 2, 3...)
 - `objects`: 검출된 `Detection` 객체들의 리스트 (`List[Detection]`).
-  - `id`: 프레임 내 객체 고유 번호 (1, 2, ...)
-  - `class_name`: 모델의 메타데이터(`model.names`)로부터 동적으로 인식된 클래스명. (기본 활성 16종: `tactile_line`, `tactile_dot`, `stairs`, `curb`, `caution_zone`, `bollard`, `barricade`, `pole`, `tree_trunk`, `bicycle`, `movable_signage`, `vehicle`, `person`, `traffic_light`, `facility`, `overhang`)
+  - `id`: 프레임 간 ByteTrack 다중 객체 추적(MOT)에 의해 유지되는 고유 추적 ID (`track_id`, 1, 2, ...). 연속 프레임 동안 동일 객체는 동일 ID를 보존.
+  - `class_name`: 모델의 메타데이터(`model.names`)로부터 동적으로 인식된 클래스명. (기본 활성 18종 Master: `tactile_line`, `tactile_dot`, `stairs`, `curb`, `crosswalk`, `bollard`, `pole`, `tree_trunk`, `bicycle`, `movable_signage`, `vehicle`, `person`, `traffic_light`, `facility`, `overhang`, `elevator`, `elevator_sign`, `toilet_sign`)
   - `confidence`: 검출 신뢰도 (0.0 ~ 1.0)
   - `distance_m`: 깊이 추정 AI(`depth.onnx`) 기반 미터(m) 단위 추정 거리
   - `bbox`: 원본 4:3 픽셀 좌표계 기준 경계상자 `[x1, y1, x2, y2]` (전 객체 공통)
