@@ -12,7 +12,7 @@ class Detection:
     id: int                                   # 프레임 내 객체 식별자 (1, 2, 3...)
     class_name: str                           # 모델에서 동적으로 인식된 클래스명
     confidence: float                         # 검출 신뢰도 (0.0 ~ 1.0)
-    distance_m: float                         # 카메라로부터의 추정 거리 (미터 단위)
+    distance_m: Optional[float]               # 추정 거리(m). 추정 불가 시 None
     bbox: List[int]                           # 경계상자 [x1, y1, x2, y2] (정수 픽셀 좌표)
     contour: Optional[List[List[int]]] = None # 외곽선 다각형 [[x, y], [x, y], ...] (정수 픽셀 좌표)
 
@@ -22,7 +22,7 @@ class Detection:
             "id": self.id,
             "class_name": self.class_name,
             "confidence": round(float(self.confidence), 4),
-            "distance_m": round(float(self.distance_m), 2),
+            "distance_m": float(self.distance_m) if self.distance_m is not None else None,
             "bbox": self.bbox,
             "contour": self.contour,
         }
