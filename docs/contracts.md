@@ -52,7 +52,7 @@ frame_data = {
   - `id`: 프레임 간 ByteTrack 다중 객체 추적(MOT)에 의해 유지되는 고유 추적 ID (`track_id`, 1, 2, ...). 유효한 추적값이 있는 경우 연속 프레임의 ID를 사용하며, 추적값이 없으면 프레임 내 순번으로 대체된다. 재시작·추적 단절 후 동일성을 보장하지 않는다.
   - `class_name`: 모델의 메타데이터(`model.names`)로부터 동적으로 인식된 클래스명. (기본 활성 18종 Master: `tactile_line`, `tactile_dot`, `stairs`, `curb`, `crosswalk`, `bollard`, `pole`, `tree_trunk`, `bicycle`, `movable_signage`, `vehicle`, `person`, `traffic_light`, `facility`, `overhang`, `elevator`, `elevator_sign`, `toilet_sign`)
   - `confidence`: 검출 신뢰도 (0.0 ~ 1.0)
-  - `distance_m`: 깊이 추정 AI(`depth.onnx`) 기반 미터(m) 단위 추정 거리
+  - `distance_m`: `Optional[float]`. 깊이 추정 AI(`depth.onnx`) 기반 미터(m) 단위 추정 거리. 모델 없음·깊이 추론 실패·유효하지 않은 깊이값은 `None`이며 직렬화 시 `null`이다. 기본 거리로 대체하지 않는다. 거리 계산·직렬화에서는 정밀도를 유지하고, 표시 문구에서만 반올림한다. 점형 판단은 거리 미상·음수·비유한 값을 병합 전에 제외한다.
   - `bbox`: 원본 4:3 픽셀 좌표계 기준 경계상자 `[x1, y1, x2, y2]` (전 객체 공통)
   - `contour`: 외곽선 다각형 꼭짓점 좌표 목록 `[[x, y], [x, y], ...]` (세그멘테이션 마스크 보유 객체)
 - `situations`: 실행할 분석 종류 목록. 확정된 위험을 의미하지 않으며 여러 상황을 동시에 지정할 수 있다. (생략하면 아래 규칙으로 자동 선택, 직접 지정한 빈 목록은 자동 선택하지 않음)
@@ -62,8 +62,8 @@ frame_data = {
 - `frame_interface.build_frame(frame_id, objects=None, situations=None)`: AI 결과(`List[Detection]`)를 받아 표준 `frame_data` 딕셔너리로 패키징한다.
 - `frame_interface.analyze(frame_data)`: situations에 지정된 모듈을 각각 호출하고 반환 목록을 합친다. 각 모듈은 `frame_data["objects"]`의 `Detection` 객체들을 검사하여 위험을 판단한다.
 - `frame_interface.run_test(situation)`: 버튼 연결 확인 전용. 빈 프레임에 상황 하나를 직접 지정한 뒤 analyze를 호출한다. AI 기반 상황 판단이 아니다.
-- 네 상황 모듈의 `analyze(frame_data)`: 현재 TODO와 `return []`만 있다. 향후 세부 위험 판단을 담당한다.
-- 판단 결과: 현재 모듈은 빈 목록을 반환한다. 향후 구현할 항목은 아래 공통 반환 계약을 따른다. 빈 결과는 안전하다는 의미가 아니다.
+- `tactile_context.analyze(frame_data)`: 가운데 1/3의 5m 이내 점형 구역 중 가장 가까운 것을 분석한다. 선형 접촉·세로 위치는 선택 조건이 아니다. 나머지 세 상황 모듈은 TODO와 `return []` 상태다.
+- 판단 결과: 점형 판단은 아래 공통 반환 계약으로 결과를 생성한다. 나머지 세 모듈은 빈 목록을 반환한다. 빈 결과는 안전하다는 의미가 아니다.
 
 ## 호출 흐름
 보존된 테스트 함수: `PythonBridge → run_test → 공통 입력 구성 → 해당 Python 모듈 → 빈 목록`. 현재 UI에서는 호출하지 않는다.
@@ -96,7 +96,7 @@ objects가 지정되면 model_results보다 우선한다. model_results만 제�
 build_frame은 데이터를 반환할 뿐 모듈을 실행하지 않는다. 호출자는 analyze(frame_data)를 호출해야 한다.
 analyze는 선택된 모듈의 반환 목록을 합치며 음성·진동을 직접 실행하지 않는다.
 
-## 공통 반환 계약 (문서 정의, 결과 생성은 미구현)
+## 공통 반환 계약 (점형 판단에 구현, 앱 전달은 미구현)
 각 상황 모듈은 아래 항목을 가진 딕셔너리의 목록을 반환한다. 안내 근거가 없으면 []다.
 
 | 키 | 형식·의미 |
@@ -109,6 +109,6 @@ analyze는 선택된 모듈의 반환 목록을 합치며 음성·진동을 직�
 INFO는 환경 정보, CAUTION은 주의 필요, URGENT는 즉시 대응 필요를 뜻한다.
 모듈별 등급을 고정하지 않는다. 각 모듈의 실제 조건과 임계값은 별도 검증한다.
 analyze는 목록을 합칠 뿐 등급 정렬·중복 제거·동률 처리를 하지 않는다.
-결과 생성·형식 검사·Kotlin 전달·공통 안내 처리는 아직 구현하지 않았다.
-객체 ID는 추적 실패 시 프레임 내 순번으로 대체될 수 있고, distance_m은 깊이 실패 시 1.0이므로 지속 ID·유효 미터 거리로 무조건 신뢰하지 않는다.
+점형 판단의 결과 생성·형식 테스트는 구현했다. Kotlin 전달·공통 안내 처리는 아직 구현하지 않았다.
+객체 ID는 추적 실패 시 프레임 내 순번으로 대체될 수 있고, distance_m은 깊이 실패 시 None이다. 지속 ID·유효 미터 거리로 무조건 신뢰하지 않으며, 거리 미상은 5m 이내 판정이나 가장 가까운 대상 선정의 근거로 사용하지 않는다.
 2번 담당자의 입력·구현 범위·반환 예시·남은 연결 작업은 [상황 판단 핸드오프](situation-handoff.md)를 참고한다.

@@ -15,6 +15,20 @@ import frame_interface
 
 
 class DetectionInterfaceTest(unittest.TestCase):
+    def test_unknown_distance_serializes_as_null(self):
+        import json
+        det = Detection(1, "tactile_dot", 0.9, None, [280, 200, 360, 240])
+        self.assertIsNone(det.to_dict()["distance_m"])
+        self.assertIsNone(json.loads(json.dumps(det.to_dict()))["distance_m"])
+
+    def test_distance_above_five_survives_serialization(self):
+        import json
+        det = Detection(1, "tactile_dot", 0.9, 5.004, [280, 200, 360, 240])
+        restored = Detection(**json.loads(json.dumps(det.to_dict())))
+        self.assertEqual(restored.distance_m, 5.004)
+        frame = frame_interface.build_frame(1, objects=[restored])
+        self.assertEqual(frame_interface.analyze(frame), [])
+
     def make_objects(self, *class_names):
         # 분류 테스트에는 클래스명만 다르게 넣는다.
         return [
@@ -103,7 +117,7 @@ class DetectionInterfaceTest(unittest.TestCase):
         self.assertEqual(d["id"], 1)
         self.assertEqual(d["class_name"], "tactile_line")
         self.assertEqual(d["confidence"], 0.9234)
-        self.assertEqual(d["distance_m"], 1.23)
+        self.assertEqual(d["distance_m"], 1.234)
         self.assertEqual(d["bbox"], [100, 150, 250, 400])
         self.assertEqual(d["contour"], [[100, 150], [250, 150], [250, 400], [100, 400]])
 
