@@ -127,7 +127,7 @@ frame_data = {
             contour=[[215, 306], ...],
         )
     ],
-    "situations": ["TACTILE_ANOMALY", "WALKING_HAZARD"],
+    "situations": ["WALKING_HAZARD"],
 }
 ```
 
@@ -138,5 +138,10 @@ frame_data = {
 ## 7. AI 팀과 다음에 확정할 사항
 
 - 안드로이드 실기기(Kotlin/Chaquopy) 상에서의 실시간 프레임 버퍼 전달 및 TFLite/ONNX 실행 엔진 최종 융합
-- 각 4대 상황 판단 모듈(`tactile_anomaly`, `tactile_context`, `walking_hazard`, `overhead_hazard`)의 세부 판단 규칙 알고리즘 구현
-- 상황 판단 결과(`results`)의 세부 항목 명세 및 Kotlin TTS/진동 안내 연동 형식 확정
+- 2·3·4 상황 모듈(`tactile_context`, `walking_hazard`, `overhead_hazard`)의 세부 판단 구현. 1번은 이번 범위에서 제외
+- 상황 판단 결과 생성과 Kotlin TTS/진동 연결 구현. 공통 반환 항목은 contracts.md와 situation-handoff.md를 따른다
+
+## 클래스 기반 분석 대상 선택 추가
+Python build_frame은 situations 생략 시 2·3·4 분석 대상을 자동 선택한다. 규칙은 docs/contracts.md를 따른다. 전체 objects를 유지하며 위험 판단과 음성·진동은 수행하지 않는다. 카메라와 AI의 실시간 연결은 여전히 TODO다.
+
+2번 담당자의 상세 개발 안내와 공통 결과·우선순위 계약: [상황 판단 핸드오프](situation-handoff.md).

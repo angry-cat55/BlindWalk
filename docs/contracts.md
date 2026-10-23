@@ -35,7 +35,7 @@ frame_data = {
     "objects": [
         Detection(
             id=1,
-            class_name="tactile_line",
+            class_name="tactile_dot",
             confidence=0.92,
             distance_m=1.2,
             bbox=[100, 150, 250, 400],
@@ -43,19 +43,19 @@ frame_data = {
         ),
         # ...
     ],
-    "situations": ["TACTILE_ANOMALY", "WALKING_HAZARD"],
+    "situations": ["TACTILE_CONTEXT"],
 }
 ```
 
 - `frame_id`: 같은 촬영 프레임의 예측을 묶는 식별자. (1, 2, 3...)
 - `objects`: 검출된 `Detection` 객체들의 리스트 (`List[Detection]`).
-  - `id`: 프레임 간 ByteTrack 다중 객체 추적(MOT)에 의해 유지되는 고유 추적 ID (`track_id`, 1, 2, ...). 연속 프레임 동안 동일 객체는 동일 ID를 보존.
+  - `id`: 프레임 간 ByteTrack 다중 객체 추적(MOT)에 의해 유지되는 고유 추적 ID (`track_id`, 1, 2, ...). 유효한 추적값이 있는 경우 연속 프레임의 ID를 사용하며, 추적값이 없으면 프레임 내 순번으로 대체된다. 재시작·추적 단절 후 동일성을 보장하지 않는다.
   - `class_name`: 모델의 메타데이터(`model.names`)로부터 동적으로 인식된 클래스명. (기본 활성 18종 Master: `tactile_line`, `tactile_dot`, `stairs`, `curb`, `crosswalk`, `bollard`, `pole`, `tree_trunk`, `bicycle`, `movable_signage`, `vehicle`, `person`, `traffic_light`, `facility`, `overhang`, `elevator`, `elevator_sign`, `toilet_sign`)
   - `confidence`: 검출 신뢰도 (0.0 ~ 1.0)
   - `distance_m`: 깊이 추정 AI(`depth.onnx`) 기반 미터(m) 단위 추정 거리
   - `bbox`: 원본 4:3 픽셀 좌표계 기준 경계상자 `[x1, y1, x2, y2]` (전 객체 공통)
   - `contour`: 외곽선 다각형 꼭짓점 좌표 목록 `[[x, y], [x, y], ...]` (세그멘테이션 마스크 보유 객체)
-- `situations`: 실행할 분석 종류 목록. 확정된 위험을 의미하지 않으며 여러 상황을 동시에 지정할 수 있다. (미정인 경우 빈 리스트)
+- `situations`: 실행할 분석 종류 목록. 확정된 위험을 의미하지 않으며 여러 상황을 동시에 지정할 수 있다. (생략하면 아래 규칙으로 자동 선택, 직접 지정한 빈 목록은 자동 선택하지 않음)
 - 상황 이름: `TACTILE_ANOMALY`, `TACTILE_CONTEXT`, `WALKING_HAZARD`, `OVERHEAD_HAZARD`.
 
 ## 함수와 담당 범위
@@ -63,14 +63,14 @@ frame_data = {
 - `frame_interface.analyze(frame_data)`: situations에 지정된 모듈을 각각 호출하고 반환 목록을 합친다. 각 모듈은 `frame_data["objects"]`의 `Detection` 객체들을 검사하여 위험을 판단한다.
 - `frame_interface.run_test(situation)`: 버튼 연결 확인 전용. 빈 프레임에 상황 하나를 직접 지정한 뒤 analyze를 호출한다. AI 기반 상황 판단이 아니다.
 - 네 상황 모듈의 `analyze(frame_data)`: 현재 TODO와 `return []`만 있다. 향후 세부 위험 판단을 담당한다.
-- 판단 결과: 현재 빈 목록. 항목의 필드는 미정이다. 빈 결과는 안전하다는 의미가 아니다.
+- 판단 결과: 현재 모듈은 빈 목록을 반환한다. 향후 구현할 항목은 아래 공통 반환 계약을 따른다. 빈 결과는 안전하다는 의미가 아니다.
 
 ## 호출 흐름
 보존된 테스트 함수: `PythonBridge → run_test → 공통 입력 구성 → 해당 Python 모듈 → 빈 목록`. 현재 UI에서는 호출하지 않는다.
 보존된 Mock 테스트 함수: `PythonBridge → mock_inference.infer → 고정 Mock 문자열`.
 목표: `카메라 → 하나 이상의 AI 예측 → build_frame → analyze → 해당 상황 모듈 → 결과 → Kotlin 음성·진동`.
 
-현재 UI 흐름은 `메인 → 시작 → CameraX Preview + 원본 선택 → AiFrameInput TODO → 중지/뒤로 → 메인`이다. 카메라와 Python 사이의 프레임 전달, 실제 모델 추론, 모델 결과 변환, 상황 자동 선택, 자동 피드백은 구현하지 않는다.
+현재 UI 흐름은 `메인 → 시작 → CameraX Preview + 원본 선택 → AiFrameInput TODO → 중지/뒤로 → 메인`이다. 카메라와 Python 사이의 프레임 전달, 실제 모델 추론, 앱의 실시간 AI 연결과 자동 피드백은 구현하지 않는다. Python build_frame의 클래스 기반 상황 선택은 구현되어 있으나 위험 판단은 아니다.
 Mock 문자열을 실제 AI 결과로 취급하지 않는다. 계약 변경 시 이 문서와 AGENTS.md를 함께 수정한다.
 
 ## 실제 서비스로 바꿀 때의 진입점
@@ -78,3 +78,37 @@ Mock 문자열을 실제 AI 결과로 취급하지 않는다. 계약 변경 시 
 실제 추론 연결을 검증한 뒤 Mock 파일과 `run_test()`를 제거하고, Bridge는 실제 입력과 결과 전달을 담당하도록 수정한다.
 공통 처리의 `build_frame → analyze → 각 모듈의 analyze(frame_data)` 경로는 유지·구현한다.
 사용자의 시작 동작에서 이 경로를 호출할 실시간 처리 연결은 아직 없다. 버튼 전용 테스트는 제거·갱신하되 공통 모듈 호출 계약 검증은 유지한다.
+
+## 클래스 기반 상황 선택
+`build_frame()`은 situations를 생략하거나 None으로 주면 아래 순서로 분석 대상을 선택한다.
+
+| 분석 종류 | 탐지 클래스 조건 |
+| --- | --- |
+| TACTILE_CONTEXT (2번) | tactile_dot |
+| WALKING_HAZARD (3번) | stairs, curb, bollard, pole, tree_trunk, bicycle, movable_signage, vehicle, person, facility 중 하나 이상 |
+| OVERHEAD_HAZARD (4번) | overhang |
+
+여러 상황을 동시에 선택할 수 있고 각 상황은 한 번만 포함한다.
+빈 객체 목록이나 조건에 없는 클래스만 있으면 situations는 빈 목록이다.
+TACTILE_ANOMALY는 자동 선택하지 않는다. 기존 수동 테스트 호출은 유지한다.
+객체의 신뢰도·거리·위치로 위험을 확정하지 않으며, 전체 objects를 각 모듈에 전달한다.
+objects가 지정되면 model_results보다 우선한다. model_results만 제공해도 같은 분류를 수행한다.
+build_frame은 데이터를 반환할 뿐 모듈을 실행하지 않는다. 호출자는 analyze(frame_data)를 호출해야 한다.
+analyze는 선택된 모듈의 반환 목록을 합치며 음성·진동을 직접 실행하지 않는다.
+
+## 공통 반환 계약 (문서 정의, 결과 생성은 미구현)
+각 상황 모듈은 아래 항목을 가진 딕셔너리의 목록을 반환한다. 안내 근거가 없으면 []다.
+
+| 키 | 형식·의미 |
+| --- | --- |
+| situation | str: TACTILE_CONTEXT / WALKING_HAZARD / OVERHEAD_HAZARD |
+| object_id | int: 입력 Detection.id 중 안내의 주 대상 |
+| message | str: 화면·TTS용 비어 있지 않은 한국어 안내 |
+| priority | str: INFO / CAUTION / URGENT |
+
+INFO는 환경 정보, CAUTION은 주의 필요, URGENT는 즉시 대응 필요를 뜻한다.
+모듈별 등급을 고정하지 않는다. 각 모듈의 실제 조건과 임계값은 별도 검증한다.
+analyze는 목록을 합칠 뿐 등급 정렬·중복 제거·동률 처리를 하지 않는다.
+결과 생성·형식 검사·Kotlin 전달·공통 안내 처리는 아직 구현하지 않았다.
+객체 ID는 추적 실패 시 프레임 내 순번으로 대체될 수 있고, distance_m은 깊이 실패 시 1.0이므로 지속 ID·유효 미터 거리로 무조건 신뢰하지 않는다.
+2번 담당자의 입력·구현 범위·반환 예시·남은 연결 작업은 [상황 판단 핸드오프](situation-handoff.md)를 참고한다.
