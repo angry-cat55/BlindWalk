@@ -1,6 +1,7 @@
 import unittest
 import sys
 import os
+from unittest.mock import patch
 
 # app/src/main/python 경로 추가
 APP_PYTHON_DIR = os.path.abspath(
@@ -14,6 +15,75 @@ import frame_interface
 
 
 class DetectionInterfaceTest(unittest.TestCase):
+    def make_objects(self, *class_names):
+        # 분류 테스트에는 클래스명만 다르게 넣는다.
+        return [
+            Detection(
+                id=index,
+                class_name=name,
+                confidence=0.9,
+                distance_m=2.0,
+                bbox=[0, 0, 100, 100],
+            )
+            for index, name in enumerate(class_names, start=1)
+        ]
+
+    def test_automatic_situation_selection(self):
+        # 같은 프레임에서 세 상황을 동시에 선택하고 중복은 제거한다.
+        objects = self.make_objects("overhang", "stairs", "tactile_dot", "curb")
+        frame = frame_interface.build_frame(42, objects=objects)
+
+        self.assertEqual(frame["frame_id"], 42)
+        self.assertIs(frame["objects"], objects)
+        self.assertEqual(frame["situations"], [
+            "TACTILE_CONTEXT", "WALKING_HAZARD", "OVERHEAD_HAZARD",
+        ])
+
+    def test_each_class_selects_only_its_situation(self):
+        groups = {
+            "TACTILE_CONTEXT": ["tactile_dot"],
+            "WALKING_HAZARD": [
+                "stairs", "curb", "bollard", "pole", "tree_trunk",
+                "bicycle", "movable_signage", "vehicle", "person", "facility",
+            ],
+            "OVERHEAD_HAZARD": ["overhang"],
+        }
+        for situation, names in groups.items():
+            for name in names:
+                with self.subTest(class_name=name):
+                    frame = frame_interface.build_frame(1, self.make_objects(name))
+                    self.assertEqual(frame["situations"], [situation])
+
+    def test_context_objects_alone_do_not_select_a_situation(self):
+        objects = self.make_objects(
+            "tactile_line", "crosswalk", "traffic_light", "elevator",
+            "elevator_sign", "toilet_sign", "unknown_class",
+        )
+        frame = frame_interface.build_frame(1, model_results=objects)
+        self.assertIs(frame["objects"], objects)
+        self.assertEqual(frame["situations"], [])
+
+    def test_explicit_empty_situations_disables_automatic_selection(self):
+        frame = frame_interface.build_frame(
+            1, self.make_objects("stairs"), situations=[],
+        )
+        self.assertEqual(frame["situations"], [])
+
+    def test_selected_modules_receive_full_frame_and_results_are_combined(self):
+        frame = frame_interface.build_frame(
+            1, self.make_objects("tactile_dot", "stairs", "overhang"),
+        )
+        with (
+            patch.object(frame_interface.tactile_context, "analyze", return_value=["context"]) as context,
+            patch.object(frame_interface.walking_hazard, "analyze", return_value=["walking"]) as walking,
+            patch.object(frame_interface.overhead_hazard, "analyze", return_value=["overhead"]) as overhead,
+            patch.object(frame_interface.tactile_anomaly, "analyze") as anomaly,
+        ):
+            self.assertEqual(frame_interface.analyze(frame), ["context", "walking", "overhead"])
+            for module in (context, walking, overhead):
+                module.assert_called_once_with(frame)
+            anomaly.assert_not_called()
+
     def test_detection_dataclass_creation_and_to_dict(self):
         """Detection 데이터클래스 생성 및 to_dict 직렬화 검증"""
         det = Detection(
