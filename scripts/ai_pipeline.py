@@ -9,6 +9,7 @@ BlindWalk AI Pipeline (YOLO11n-seg + MiDaS Depth + ByteTrack Tracking)
 - 최종 결과를 표준 Detection 데이터클래스 및 frame_data 딕셔너리로 패키징합니다.
 """
 
+import math
 import os
 import sys
 from typing import List, Dict, Any, Optional
@@ -119,7 +120,12 @@ class BlindWalkAIPipeline:
         tensor_in = np.transpose(normalized, (2, 0, 1))[np.newaxis, ...]
 
         # 2) ONNX 세션 추론
-        raw_depth = self.depth_sess.run(None, {"input": tensor_in})[0][0]
+        try:
+            raw_depth = self.depth_sess.run(None, {"input": tensor_in})[0][0]
+        except Exception as exc:
+            # 깊이 추론 실패는 임의 거리 대신 거리 미상으로 전달한다.
+            print(f"깊이 추론 실패: {exc}", file=sys.stderr)
+            return None
 
         # 3) 원본 4:3 영상 크기로 선형 복원
         depth_map = cv2.resize(raw_depth, (w, h), interpolation=cv2.INTER_LINEAR)
@@ -186,7 +192,7 @@ class BlindWalkAIPipeline:
                 contour = approx.reshape(-1, 2).tolist()
 
             # 4. 거리(distance_m) 계산
-            distance_m = 1.0  # 기본값
+            distance_m = None  # 깊이 결과가 없으면 거리 미상
             if depth_map is not None:
                 if has_mask and contour and len(contour) >= 3:
                     # 마스크 다각형 내부 깊이값 샘플링
@@ -203,7 +209,11 @@ class BlindWalkAIPipeline:
                     depth_val = float(np.median(roi)) if roi.size > 0 else float(depth_map[cy, cx])
 
                 # 상대 깊이 -> 미터 단위 변환 및 클리핑 (0.3m ~ 15.0m)
-                distance_m = round(max(0.3, min(15.0, self.scale_k / (depth_val + 1e-4))), 2)
+                if math.isfinite(depth_val) and depth_val > 0:
+                    estimated_distance = self.scale_k / (depth_val + 1e-4)
+                    if math.isfinite(estimated_distance) and estimated_distance > 0:
+                        # 대상 선정 전에는 정밀도를 유지한다. 반올림은 표시 시에만 한다.
+                        distance_m = max(0.3, min(15.0, estimated_distance))
 
             det = Detection(
                 id=track_id,
