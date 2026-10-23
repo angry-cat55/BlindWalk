@@ -12,7 +12,7 @@ Kotlin은 CameraX·Compose UI·권한·진동·TTS와 Python 연결을 담당하
 목표 흐름은 `카메라 → 하나 이상의 AI 예측 → frame_interface.py → 해당 상황 모듈 → 판단 결과 → Kotlin 음성·진동 안내`이다.
 `frame_interface.py`는 같은 프레임의 예측을 공통 `objects`로 정리하고 `situations`를 결정한 뒤 해당 모듈을 직접 호출한다. 별도 situation_router.py는 만들지 않는다.
 세부 위험 판단은 담당 모듈에 둔다. 실제 모델 추론의 실행 언어와 엔진은 모델 선정 후 정하며, 동일 모델을 모듈마다 중복 실행하지 않는다.
-이것은 최종 목표 설명이다. 현재 본 앱은 가로 메인→시작→4:3 카메라→중지/뒤로→메인 흐름과 초당 최대 약5장 원본 프레임 선택을 구현한다. Python 인터페이스는 Detection 목록을 묶고 클래스명으로 2·3·4 분석 대상을 자동 선택한다. 2번 점형 주변 판단과 3번 위치·클래스 기반 안내는 Python에 구현했다. 본 앱과 AI의 연결·4번 판단·자동 피드백은 TODO다.
+이것은 최종 목표 설명이다. 현재 본 앱은 가로 메인→시작→4:3 카메라→중지/뒤로→메인 흐름과 초당 최대 약5장 원본 프레임 선택을 구현한다. Python 인터페이스는 Detection 목록을 묶고 클래스명으로 2·3·4 분석 대상을 자동 선택한다. 2번 점형 주변 판단·3번 위치와 클래스 기반 안내·4번 돌출물 존재 안내는 Python에 구현했다. 본 앱과 AI의 연결·자동 피드백은 TODO다.
 
 ## 현재 카메라 입력 범위
 - CameraPreview.kt는 Preview30FPS 목표와 ImageAnalysis를 바인딩한다. 기기·조명에 따른 실제 FPS는 별도 검증한다.
@@ -70,8 +70,8 @@ Kotlin은 CameraX·Compose UI·권한·진동·TTS와 Python 연결을 담당하
 모델 및 실행 구조가 미정이므로 현재 추론 프레임워크를 추가하지 않는다.
 
 ## 공통 데이터 계약
-모든 Python 상황 모듈은 `analyze(frame_data)` 함수를 따른다. `Detection.distance_m`은 거리 추정 불가 시 `None`이며 임의의 기본 거리로 대체하지 않는다. 점형 판단은 거리 미상·음수·비유한 값을 병합 전에 제외한다. `tactile_context`는 점형 주변 판단을 구현했으며 walking_hazard는 위치·클래스 기반 3번 안내를 구현했으며 1·4번 모듈은 TODO 상태다.
-공통 입력은 `frame_id`, `objects`, `situations`를 가진 Python 딕셔너리이며 반환은 판단 결과 목록이다. 결과 항목은 situation·object_id·message·priority를 가진 딕셔너리로 통일한다. priority는 INFO·CAUTION·URGENT다. 점형·일반 보행 판단은 이 형식으로 반환하며 앱 전달은 미구현이다. 상황 모듈 개발 전 docs/situation-handoff.md도 읽는다.
+모든 Python 상황 모듈은 `analyze(frame_data)` 함수를 따른다. `Detection.distance_m`은 거리 추정 불가 시 `None`이며 임의의 기본 거리로 대체하지 않는다. 점형 판단은 거리 미상·음수·비유한 값을 병합 전에 제외한다. `tactile_context`는 점형 주변 판단을 구현했으며 walking_hazard는 위치·클래스 기반 3번 안내를 구현했으며 4번은 overhang마다 돌출물 주의·CAUTION을 반환한다. 1번 모듈만 TODO 상태다.
+공통 입력은 `frame_id`, `objects`, `situations`를 가진 Python 딕셔너리이며 반환은 판단 결과 목록이다. 결과 항목은 situation·object_id·message·priority를 가진 딕셔너리로 통일한다. priority는 INFO·CAUTION·URGENT다. 2·3·4번은 이 형식으로 반환하며 앱 전달은 미구현이다. 상황 모듈 개발 전 docs/situation-handoff.md도 읽는다.
 `situations`는 확정된 위험이 아니라 분석할 상황 종류의 목록이다. build_frame은 situations 생략 시 tactile_dot→TACTILE_CONTEXT, 지상 장애물 10종→WALKING_HAZARD, overhang→OVERHEAD_HAZARD를 자동 선택한다. 구체적 클래스 목록은 docs/contracts.md를 따른다. TACTILE_ANOMALY는 자동 선택하지 않는다. 직접 지정한 situations(빈 목록 포함)는 테스트 호환을 위해 유지한다.
 Kotlin의 PythonBridge는 호출과 결과 전달만 담당하고 판단 로직은 넣지 않는다. Kotlin의 별도 상황 인터페이스·모델 타입을 중복 유지하지 않는다.
 실제 모델 출력이 확정되면 공통 협의를 통해 변경할 수 있다.
@@ -148,3 +148,6 @@ AI가 탐지하지 못했다는 이유로 보행환경이 안전하다고 판단
 
 ## 3번 모듈의 현재 정책
 walking_hazard는 image_width·image_height를 받아 객체 하단 15%와 점자블록 contour/중앙 사다리꼴의 겹침을 검사한다. 크기가 없으면 []를 반환한다. 차량 URGENT, 사람·시설물 INFO, 나머지 대상 7종 CAUTION은 초기 클래스별 안내 정책이다. 거리로 등급을 정하지 않으며 음성·진동을 직접 실행하지 않는다. 상세 기준은 docs/contracts.md를 따른다.
+
+## 4번 모듈의 현재 정책
+overhead_hazard는 전체 objects에서 overhang만 골라 객체마다 돌출물 주의·CAUTION을 반환한다. 위치·거리·신뢰도로 추가 필터링하지 않으며 영상 크기가 없어도 동작한다. 하위 클래스 추측·충돌 임박 판단·TTS·진동·반복 제한은 수행하지 않는다.
