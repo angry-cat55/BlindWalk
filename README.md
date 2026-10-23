@@ -25,13 +25,15 @@ app/src/main/java/com/example/blindwalk/
 ├── bridge/PythonBridge.kt      # 보존된 Python 테스트 연결
 └── feedback/                  # 보존된 진동·TTS
 app/src/main/python/
-├── frame_interface.py          # 향후 AI 결과 공통화·상황별 호출
+├── frame_interface.py          # Detection 묶기·2/3/4 분석 대상 선택·모듈 호출
 ├── mock_inference.py           # 보존된 Mock 테스트 함수
 ├── tactile_anomaly.py          # 점자블록 이상
 ├── tactile_context.py          # 점형블록 주변
 ├── walking_hazard.py           # 일반 보행 위험
 └── overhead_hazard.py          # 머리 높이 장애물
 ```
+
+Python 인터페이스는 Detection 목록의 클래스명으로 2·3·4 분석 대상을 선택한다. 위험 판단이 아니며 본 앱 카메라와는 아직 연결되지 않았다.
 
 ## AI 팀 연결 규칙
 `AiFrameInput.onFrameSelected(frameId: Long, image: ImageProxy)`를 분석 전용 스레드에서 동기 호출한다.
@@ -41,6 +43,7 @@ app/src/main/python/
 KEEP_ONLY_LATEST와 전용 executor를 사용하고 추가 프레임 큐는 만들지 않는다.
 상세 계약: [docs/contracts.md](docs/contracts.md). 카메라 원본과 추론 후 Python frame_data는 별개다.
 파일별 촬영·선택·전달 흐름과 팀원 작업 지점은 [AI 팀 공유 문서](docs/ai-team-handoff.md)를 참고한다.
+2번 담당자의 개발 범위·입출력·우선순위는 [상황 판단 핸드오프](docs/situation-handoff.md)를 참고한다.
 앱 아이콘은 메인 워드마크의 보라색 Blind/Walk 두 줄을 사용한다. [아이콘 리소스 안내](docs/app-icon.md).
 
 ## 개발 환경
