@@ -70,8 +70,8 @@ Kotlin은 CameraX·Compose UI·권한·진동·TTS와 Python 연결을 담당하
 모델 및 실행 구조가 미정이므로 현재 추론 프레임워크를 추가하지 않는다.
 
 ## 공통 데이터 계약
-모든 Python 상황 모듈은 `analyze(frame_data)` 함수를 따른다. 현재 함수 본문은 TODO와 `return []`만 작성한다.
-공통 입력은 `frame_id`, `objects`, `situations`를 가진 Python 딕셔너리이며 반환은 판단 결과 목록이다. 향후 결과 항목은 situation·object_id·message·priority를 가진 딕셔너리로 통일한다. priority는 INFO·CAUTION·URGENT다. 문서 계약이며 현재 모듈의 결과 생성은 미구현이다. 상황 모듈 개발 전 docs/situation-handoff.md도 읽는다.
+모든 Python 상황 모듈은 `analyze(frame_data)` 함수를 따른다. `Detection.distance_m`은 거리 추정 불가 시 `None`이며 임의의 기본 거리로 대체하지 않는다. 점형 판단은 거리 미상·음수·비유한 값을 병합 전에 제외한다. `tactile_context`는 점형 주변 판단을 구현했으며 나머지 세 상황 모듈은 TODO와 `return []` 상태다.
+공통 입력은 `frame_id`, `objects`, `situations`를 가진 Python 딕셔너리이며 반환은 판단 결과 목록이다. 결과 항목은 situation·object_id·message·priority를 가진 딕셔너리로 통일한다. priority는 INFO·CAUTION·URGENT다. 점형 판단은 이 형식으로 반환하며 앱 전달은 미구현이다. 상황 모듈 개발 전 docs/situation-handoff.md도 읽는다.
 `situations`는 확정된 위험이 아니라 분석할 상황 종류의 목록이다. build_frame은 situations 생략 시 tactile_dot→TACTILE_CONTEXT, 지상 장애물 10종→WALKING_HAZARD, overhang→OVERHEAD_HAZARD를 자동 선택한다. 구체적 클래스 목록은 docs/contracts.md를 따른다. TACTILE_ANOMALY는 자동 선택하지 않는다. 직접 지정한 situations(빈 목록 포함)는 테스트 호환을 위해 유지한다.
 Kotlin의 PythonBridge는 호출과 결과 전달만 담당하고 판단 로직은 넣지 않는다. Kotlin의 별도 상황 인터페이스·모델 타입을 중복 유지하지 않는다.
 실제 모델 출력이 확정되면 공통 협의를 통해 변경할 수 있다.
