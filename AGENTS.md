@@ -12,7 +12,7 @@ Kotlin은 CameraX·Compose UI·권한·진동·TTS와 Python 연결을 담당하
 목표 흐름은 `카메라 → 하나 이상의 AI 예측 → frame_interface.py → 해당 상황 모듈 → 판단 결과 → Kotlin 음성·진동 안내`이다.
 `frame_interface.py`는 같은 프레임의 예측을 공통 `objects`로 정리하고 `situations`를 결정한 뒤 해당 모듈을 직접 호출한다. 별도 situation_router.py는 만들지 않는다.
 세부 위험 판단은 담당 모듈에 둔다. 실제 모델 추론의 실행 언어와 엔진은 모델 선정 후 정하며, 동일 모델을 모듈마다 중복 실행하지 않는다.
-이것은 최종 목표 설명이다. 현재 본 앱은 가로 메인→시작→4:3 카메라→중지/뒤로→메인 흐름과 초당 최대 약5장 원본 프레임 선택을 구현한다. 공통 결과 변환·상황 자동 선택·위험 판단·자동 피드백은 TODO다.
+이것은 최종 목표 설명이다. 현재 본 앱은 가로 메인→시작→4:3 카메라→중지/뒤로→메인 흐름과 초당 최대 약5장 원본 프레임 선택을 구현한다. Python 인터페이스는 Detection 목록을 묶고 클래스명으로 2·3·4 분석 대상을 자동 선택한다. 본 앱과 AI의 연결·위험 판단·자동 피드백은 TODO다.
 
 ## 현재 카메라 입력 범위
 - CameraPreview.kt는 Preview30FPS 목표와 ImageAnalysis를 바인딩한다. 기기·조명에 따른 실제 FPS는 별도 검증한다.
@@ -30,7 +30,7 @@ Kotlin은 CameraX·Compose UI·권한·진동·TTS와 Python 연결을 담당하
 - `mock_inference.py`는 테스트 전용이다. 실제 추론 연결을 검증한 뒤 삭제하고 Mock을 실제 예측으로 사용하지 않는다.
 - `CameraScreen.kt`는 가로 메인/촬영·시작/중지 화면을 제공한다. 실제 판단 결과 안내 화면은 향후 추가한다.
 - `PythonBridge.kt`는 Android↔Python 연결로 유지한다. Mock 호출용 `infer()`와 버튼용 `analyze(situation)`는 실제 데이터·판단 결과를 전달하는 호출로 교체한다. 현재 `analyze(situation)`는 Python `run_test()`에 연결된 테스트 진입점이다.
-- `frame_interface.py`는 유지한다. 버튼 전용 `run_test()`는 삭제하고 실제 경로는 `build_frame → analyze`로 연결한다. 공통 결과 변환·situations 선택은 추후 구현한다.
+- `frame_interface.py`는 유지한다. 버튼 전용 `run_test()`는 삭제하고 실제 경로는 `build_frame → analyze`로 연결한다. 현재 build_frame은 전체 Detection 목록을 유지하고 situations 생략 시 2·3·4 분석 대상을 자동 선택한다.
 - 네 Python 상황 모듈과 진동·TTS 파일은 유지한다. 카메라 원본 선택 이후 실제 모델 추론과 결과 연결은 별도로 구현한다.
 - 테스트 전용 함수 제거 시 이를 참조하는 버튼·Bridge·테스트·문서를 함께 정리한다. 공통 분석 호출 테스트는 유지하고 실제 계약에 맞게 갱신한다.
 
@@ -71,8 +71,8 @@ Kotlin은 CameraX·Compose UI·권한·진동·TTS와 Python 연결을 담당하
 
 ## 공통 데이터 계약
 모든 Python 상황 모듈은 `analyze(frame_data)` 함수를 따른다. 현재 함수 본문은 TODO와 `return []`만 작성한다.
-공통 입력은 `frame_id`, `objects`, `situations`를 가진 Python 딕셔너리이며 반환은 판단 결과 목록이다. 결과 항목의 필드는 아직 정하지 않는다.
-`situations`는 확정된 위험이 아니라 분석할 상황 종류의 목록이다. 현재 버튼 테스트에서만 호출 대상을 직접 지정하며 실제 AI 기반 선택은 구현하지 않는다.
+공통 입력은 `frame_id`, `objects`, `situations`를 가진 Python 딕셔너리이며 반환은 판단 결과 목록이다. 향후 결과 항목은 situation·object_id·message·priority를 가진 딕셔너리로 통일한다. priority는 INFO·CAUTION·URGENT다. 문서 계약이며 현재 모듈의 결과 생성은 미구현이다. 상황 모듈 개발 전 docs/situation-handoff.md도 읽는다.
+`situations`는 확정된 위험이 아니라 분석할 상황 종류의 목록이다. build_frame은 situations 생략 시 tactile_dot→TACTILE_CONTEXT, 지상 장애물 10종→WALKING_HAZARD, overhang→OVERHEAD_HAZARD를 자동 선택한다. 구체적 클래스 목록은 docs/contracts.md를 따른다. TACTILE_ANOMALY는 자동 선택하지 않는다. 직접 지정한 situations(빈 목록 포함)는 테스트 호환을 위해 유지한다.
 Kotlin의 PythonBridge는 호출과 결과 전달만 담당하고 판단 로직은 넣지 않는다. Kotlin의 별도 상황 인터페이스·모델 타입을 중복 유지하지 않는다.
 실제 모델 출력이 확정되면 공통 협의를 통해 변경할 수 있다.
 계약 변경 시 docs/contracts.md도 함께 수정한다.
