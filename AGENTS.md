@@ -151,3 +151,6 @@ walking_hazard는 image_width·image_height를 받아 객체 하단 15%와 점�
 
 ## 4번 모듈의 현재 정책
 overhead_hazard는 전체 objects에서 overhang만 골라 객체마다 돌출물 주의·CAUTION을 반환한다. 위치·거리·신뢰도로 추가 필터링하지 않으며 영상 크기가 없어도 동작한다. 하위 클래스 추측·충돌 임박 판단·TTS·진동·반복 제한은 수행하지 않는다.
+
+## 공통 안내 처리
+feedback/FeedbackCoordinator.kt는 Kotlin 결과 목록을 받아 등급·최근 안내 기록으로 하나를 선택한다. 메인 스레드에서 세션 동안 한 인스턴스를 유지하고 중지 시 reset한다. 최근 기록은 메모리만 사용한다. 실제 PythonBridge 변환·화면 연결은 미구현이다. 작업 전 docs/feedback-coordinator.md를 읽는다. 2번 모듈의 자체 쿨다운은 담당자 협의 없이 수정하지 않는다.
