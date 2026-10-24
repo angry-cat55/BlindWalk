@@ -20,6 +20,8 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.BlindWalk">
+        <!-- Android 12 이상에서 지원 기기의 OpenCL GPU 드라이버 접근을 허용한다. -->
+        <uses-native-library android:name="libOpenCL.so" android:required="false" />
         <activity
             android:name=".MainActivity"
             android:screenOrientation="sensorLandscape"

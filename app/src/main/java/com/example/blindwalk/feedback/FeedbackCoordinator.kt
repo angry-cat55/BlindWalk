@@ -3,7 +3,7 @@ package com.example.blindwalk.feedback
 // Python의 priority 문자열과 같은 이름을 사용한다. 순서는 낮은 등급부터다.
 enum class FeedbackPriority { INFO, CAUTION, URGENT }
 
-// Python 결과의 네 필드를 Kotlin에서 사용할 형태다. 변환은 Bridge의 향후 작업이다.
+// Python 결과의 네 필드를 Kotlin에서 사용할 형태다. PythonBridge가 변환한다.
 data class FeedbackResult(
     val situation: String,
     val objectId: Int,

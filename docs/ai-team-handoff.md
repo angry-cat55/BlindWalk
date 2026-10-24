@@ -1,147 +1,94 @@
-# AI 팀 공유: 카메라 입력부터 상황 판단까지
+# 카메라·AI·상황 판단 연결 안내
 
-## 1. 지금 구현된 범위
-
-본 앱은 가로 모드의 메인/촬영 화면과 카메라 원본 프레임 선택까지만 구현했다.
-메인에는 카메라가 없고, 시작을 누르면 후면 Preview와 프레임 선택이 켜진다. 중지·뒤로·백그라운드 이동 시 종료한다.
-AI 모델 설치·추론·전처리·Python 영상 전달·자동 상황 판단·자동 음성/진동 안내는 구현하지 않았다.
-`jh-test`의 ARCore 실험은 본 앱과 별개이며 여기에는 연결하지 않는다.
-
-## 2. 현재 실제 파일 호출 흐름
-
-아래 Kotlin 경로의 기준은 `app/src/main/java/com/example/blindwalk/`이다.
+## 실제 호출 흐름
 
 ```text
-MainActivity.kt
-  └─ ui/CameraScreen.kt
-       ├─ 메인: BlindWalk 워드마크 + 시작 버튼 (카메라 꺼짐)
-       └─ 시작 → CAMERA 권한 확인 → 촬영 화면
-            └─ camera/CameraPreview.kt
-                 ├─ 후면 카메라 → Preview → PreviewView → 화면 표시
-                 │                          (30FPS 목표)
-                 └─ 같은 카메라 → ImageAnalysis → 단일 분석 스레드
-                      └─ camera/FrameGate.kt
-                           ├─ 직전 선택 후 200ms 미만 → 선택하지 않음
-                           └─ 200ms 이상 → 최신 프레임 한 장 선택
-                                └─ camera/AiFrameInput.kt
-                                     onFrameSelected(frameId, image)
-                                     현재 본문 TODO: 실제 AI 호출 없음
-                                └─ 콜백 반환 → image.close()
+CameraScreen: 자동 시작·권한 확인
+ → CameraPreview: Preview + ImageAnalysis
+ → FrameGate: 최소 200ms 간격으로 최신 프레임 선택
+ → AiFrameInput.onFrameSelected(frameId, image)
+     16:9 cropRect·rotationDegrees 적용 → 중앙 4:3 crop → 640×480 RGB
+ → MobileInferenceEngine.infer
+     YOLO11n-seg: 실제 객체·점자블록 마스크
+     MiDaS: 상대 깊이와 AI팀 기준의 거리 환산
+ → PythonBridge.analyzeFrame
+     Detection 목록을 JSON으로 Python에 전달
+ → frame_interface.analyze_json
+     Detection 생성 → build_frame → select_situations → analyze
+ → 2·3·4번 모듈 결과 목록
+ → PythonBridge: List<FeedbackResult>로 변환
+ → 메인 스레드 FeedbackCoordinator.submit
+ → 선택 문구 표시 / SpeechFeedback / HapticFeedback
 ```
 
-- **촬영/분석 연결 파일:** `camera/CameraPreview.kt`. CameraX `ProcessCameraProvider`에 후면 카메라의 Preview와 ImageAnalysis를 함께 생명주기 바인딩한다.
-- **화면 표시:** Preview가 `PreviewView.surfaceProvider`로 연결된다. 화면 표시를 위해 Python을 거치지 않는다.
-- **프레임 선택:** `FrameGate.kt`가 단조 경과 시각으로 간격을 제한한다. 선택 횟수는 최대 약5장/초이고, 실제 추론 속도를 의미하지 않는다. 카메라 공급이 늦거나 향후 소비자가 느리면 더 낮아진다.
-- **적체 방지:** `STRATEGY_KEEP_ONLY_LATEST`로 최신 프레임만 유지하고 별도의 처리 큐는 만들지 않는다. 밀린 프레임 수량을 나중에 보충하지 않는다.
-- **반환:** 선택하지 않은 프레임·선택한 프레임·예외 발생 프레임 모두 `finally`에서 닫는다.
+PC용 scripts/ai_pipeline.py는 별도 실행기다. 앱에서 이 Python 스크립트나 ultralytics를 실행하지 않는다.
+기존 Mock·run_test 함수는 보존하지만 현재 앱 경로에서 사용하지 않는다.
 
-## 3. AI 담당자가 연결할 파일과 함수
+## 파일별 담당
 
-정확한 파일:
-
-`app/src/main/java/com/example/blindwalk/camera/AiFrameInput.kt`
-
-```kotlin
-fun onFrameSelected(frameId: Long, image: ImageProxy)
-```
-
-`CameraPreview.kt`가 이 함수를 분석 전용 스레드에서 **동기 호출**한다. 현재 반환값은 `Unit`이며 본문은 TODO다.
-이미지를 파일로 저장해서 주거나 서버로 보내는 구조가 아니다. Kotlin 메모리 안의 원본 프레임 핸들을 잠깐 전달한다.
-지금 Python 상황 모듈에는 이 영상이 전달되지 않는다.
-
-## 4. 지금 받는 데이터 형태
-
-| 값 | Kotlin/Android 형식 | 의미 |
-| --- | --- | --- |
-| frameId | Long | 선택된 프레임 번호. 선택할 때만 증가하며 카메라 재시작 시1부터. 전역 고유 ID 아님 |
-| image | androidx.camera.core.ImageProxy | CameraX 원본 영상과 메타데이터에 접근하는 핸들 |
-| image.width, image.height | Int | 원본 영상 버퍼의 가로·세로. 모델 입력 해상도로 고정하지 않음 |
-| image.cropRect | android.graphics.Rect | Preview와 공유하는 유효 촬영 영역. 원본 버퍼 기준 좌표 |
-| image.imageInfo.rotationDegrees | Int | 원본을 올바른 방향으로 해석할 회전값(도) |
-| image.imageInfo.timestamp | Long | 카메라 촬영 timestamp, 나노초. Unix epoch 시각으로 해석하지 않음 |
-| image.format | Int | 현재 CameraX 기본 YUV_420_888(format=35). 모델 입력 색상 형식이 아님 |
-| image.planes | Array<ImageProxy.PlaneProxy> | Y/U/V Plane의 ByteBuffer와 rowStride, pixelStride |
-
-실기기에서 관찰한 한 예는 `buffer=640×480`, `cropRect=(0,0)-(640,480)`, `rotationDegrees=0`, `format=35`였다.
-이는 **관찰 예시이며 고정된 모델 입력 계약이 아니다**. 해상도·stride·회전은 받은 프레임의 메타데이터로 확인해야 한다.
-Plane 버퍼를 가로×세로로 단순 연결하거나 행 간격·픽셀 간격을 무시하면 올바른 영상이 되지 않을 수 있다.
-
-### 4:3과 방향 규칙
-
-Preview와 ImageAnalysis는 공통 `ViewPort(4:3)`를 사용한다.
-`cropRect`에 해당하는 영역을 사용하고 `rotationDegrees`를 반영한 **유효 영상이 가로4:3**이다.
-원본 버퍼 전체가 언제나 가로4:3이라고 가정하지 않는다. 현재 연결점은 잘라낸 별도 Bitmap을 주지 않으며, 원본과 영역/회전 정보만 준다.
-화면 좌표·원본 버퍼 좌표·향후 모델 입력 좌표는 서로 다르다. 모델 선정 후 crop/회전/resize/letterbox와 bbox 역변환 규칙을 함께 정해야 한다.
-
-## 5. 프레임 수명과 처리 규칙
-
-1. 카메라 측이 `ImageProxy`를 소유한다. AI 담당자는 동기 콜백 안에서만 원본을 읽는다.
-2. 콜백이 끝나면 `CameraPreview.kt`가 `image.close()`한다. 소비자가 별도로 닫지 않는다.
-3. `image`, `planes`, Plane의 `ByteBuffer` 참조를 저장하거나 다른 스레드/Python으로 넘겨 나중에 읽지 않는다.
-4. 향후 비동기 추론이 필요하면 콜백 안에서 필요한 데이터의 **소유 복사본**을 만들고, 처리 중에는 입력을 버리는 등 최신 프레임 정책을 별도 연결해야 한다. 이번에는 복사·전처리·비동기 추론을 구현하지 않았다.
-5. Preview는 분석 전용 스레드의 모델 실행과 분리하되, 향후 무거운 추론을 추가하면 CPU/GPU 경합으로 Preview도 느려질 수 있으므로 다시 측정한다.
-
-## 6. 모델 선정 후 연결할 목표 흐름 — 아직 미구현
-
-```text
-AiFrameInput.onFrameSelected(frameId, image)
-  → 4:3 원본 영역·방향 해석
-  → models/active/ 모델 기반 AI 파이프라인 (YOLO11n-seg + MiDaS Depth)
-  → 프레임 내 객체별 Detection 인스턴스 생성 (bbox, contour, distance_m, class_name)
-  → app/src/main/python/frame_interface.py
-       build_frame(frame_id, objects=[Detection, ...], situations=...)
-  → 공통 Python dict {frame_id, objects, situations}
-  → frame_interface.analyze(frame_data)
-  → situations에 지정된 상황 모듈의 analyze(frame_data)
-  → 판단 결과 목록
-  → Kotlin 음성/진동 안내
-```
-
-`frame_interface.py`는 **카메라 원본을 받는 파일이 아니라 추론 후 예측 결과(`Detection` 목록)를 정리할 파일**이다.
-`build_frame`은 `objects` (`List[Detection]`)를 받아 공통 `frame_data`를 구성한다.
-동일 모델을 각 상황 모듈에서 중복 실행하지 않고 공통 추론 계층에서 실행하여 `frame_data`로 공급한다.
-
-| Python 파일 (app/src/main/python/) | 향후 담당 |
+| 파일 | 역할 |
 | --- | --- |
-| detection.py | 표준 `Detection` 데이터클래스 (`id`, `class_name`, `confidence`, `distance_m`, `bbox`, `contour`) |
-| frame_interface.py | 같은 프레임의 예측(`objects`)을 정리, 분석할 situations 선택·호출 |
-| tactile_anomaly.py | 점자블록 파손·가림·단절 등 이상 판단 |
-| tactile_context.py | 점형블록 주변 계단·횡단보도·엘리베이터 등 분석 |
-| walking_hazard.py | 턱·계단·장애물·노면 위험 판단 |
-| overhead_hazard.py | 나뭇가지·돌출 간판 등 머리 높이 장애물 판단 |
+| ui/CameraScreen.kt | 자동 촬영·일시정지, 권한, 검출 표시·안내 카드, TTS·진동 수명 관리 |
+| camera/CameraPreview.kt | CameraX 바인딩, 단일 분석 executor, 늦은 결과 폐기 |
+| camera/FrameGate.kt | 최소 200ms 간격 선택. 실제 추론 FPS 보장은 아님 |
+| camera/AiFrameInput.kt | 원본 crop·회전·RGB 크기 조절, 추론과 Python 분석 연결 |
+| inference/MobileInferenceEngine.kt | YOLO GPU 우선·ONNX CPU 추론, 입력·shape·클래스 해시 검증, 거리 환산 |
+| inference/YoloDecoder.kt | 정규화 xywh 복원·클래스별 NMS·점자블록 contour |
+| bridge/PythonBridge.kt | Detection JSON 전달과 4키 결과의 Kotlin 변환 |
+| Python frame_interface.py | Android JSON 진입점, build_frame, 상황 선택·호출 |
+| feedback/FeedbackCoordinator.kt | 등급·반복 제한 후 안내 하나 선택 |
 
-공통 결과의 표준 형태:
+Kotlin 경로 기준은 app/src/main/java/com/example/blindwalk/다.
+
+## 프레임 소유권과 성능
+
+- ImageProxy·planes는 동기 onFrameSelected 안에서만 유효하다. 반환 후 CameraPreview가 finally에서 닫는다.
+- raw buffer는 모델 입력 텐서가 아니다. 16:9 crop·회전 후 중앙 4:3을 잘라 RGB 640×480으로 맞춘다.
+- 640px 너비는 기존 2번 담당 모듈의 기본 계약을 유지하기 위한 모바일 크기다. 모델 텐서는 별도 640×640이다.
+- Preview는 30FPS 목표이고 분석은 단일 executor에서 최대 약5장/초다. 추론이 200ms보다 느리면 실제 처리량이 낮아진다.
+- KEEP_ONLY_LATEST를 유지해 원본 프레임이 쌓이지 않게 한다. 별도 영상 저장·프레임 큐는 없다.
+- 중지·뒤로·백그라운드 시 결과를 무효화한다. 실행 중 모델을 즉시 닫지 않고 분석 executor 뒤에서 해제한다.
+- 선택된 결과는 메인 스레드에서만 Coordinator에 전달한다. AiFrameResult에 검출 목록·선택 시각·판단 결과를 담아 UI로 보낸다. 화면에는 bbox·점자블록 contour를 그리며 경로선은 만들지 않는다.
+
+## 모델 전처리·출력 계약
+
+- YOLO: FP32 NCHW [1,3,640,640], RGB/255. 4:3 영상에 회색114 letterbox를 적용한다.
+- 출력 [1,54,8400]: normalized cx/cy/w/h + 이미 sigmoid된18class + mask32계수.
+- prototype [1,32,160,160]. 점자블록만 실제 mask의 가장 큰 외곽선으로 복원하며 다른 클래스 contour는 None이다.
+- confidence0.25, 클래스별 NMS IoU0.45, 상위 후보300·결과30개 제한이다. 임계값은 실제 영상 검증 대상이다.
+- MiDaS: FP32 NCHW [1,3,256,256], RGB ImageNet 정규화. 출력 크기는 실행 결과에서 읽는다.
+- 객체 contour 또는 bbox 중앙50% 내부의 깊이 셀들을 표본으로 삼는다. PC의 원본 크기 보간 후 중앙값과는 해상도 차이가 있다.
+- K=1000 역심도 환산·0.3~15m 제한은 AI팀 PC 기준이다. 모델 자체가 보정된 미터 깊이를 보장하는 것은 아니다.
+- 유효 깊이가 없으면 None이다. 모델 로드/실행 오류는 화면 오류로 전파하며 가짜 예측으로 대체하지 않는다.
+
+원본 모델은 models/active에 유지하고 Gradle prepareAiAssets가 두 모델만 생성 assets에 넣는다.
+classes는 app/src/main/assets/ai/labels.json에 metadata에서 추출했으며 SHA-256이 모델과 다르면 실행을 중단한다.
+라이브러리는 LiteRT1.4.2·ONNX Runtime Android1.24.3이고 Python AI 패키지는 추가하지 않았다.
+
+## 담당자 주의점
+
+- Detection 구조와 결과 4키 계약은 [contracts](contracts.md)를 따른다.
+- 모바일 id는 YOLO 프레임 내 후보 번호다. PC ByteTrack 결과와 구분하며 동일 객체 추적을 보장하지 않는다.
+- 기존 2번 모듈의 자체 쿨다운과 Coordinator의 ID 기반 반복 제한은 이 제약이 있다. 이번 연결에서 담당자 로직은 수정하지 않았다.
+- 2번 세션 상태는 최초 분석 때 reset_session으로 초기화한다.
+- [상황 핸드오프](situation-handoff.md), [공통 안내 처리](feedback-coordinator.md)를 함께 읽는다.
+- 합성 입력·검정 영상의 모델 실행 성공과 실제 보행 영상 정확도·실기기 FPS·한국어 음성 청취 검증을 구분한다.
+
+## 가중치 교체 시 labels.json 갱신
+
+새 TFLite의 입력·출력 shape가 동일한지 먼저 확인한다. 아래 코드는 클래스 목록과 해시만 갱신하며 다른 모델 구조를 자동 지원하지 않는다.
 
 ```python
-from detection import Detection
-
-frame_data = {
-    "frame_id": 1,
-    "objects": [
-        Detection(
-            id=1,
-            class_name="stairs",
-            confidence=0.91,
-            distance_m=1.8,
-            bbox=[215, 306, 458, 471],
-            contour=[[215, 306], ...],
-        )
-    ],
-    "situations": ["WALKING_HAZARD"],
-}
+import hashlib, json, zipfile
+from pathlib import Path
+model = Path("models/active/yolo11n_seg_18cls.tflite")
+with zipfile.ZipFile(model) as archive:
+    metadata = json.loads(archive.read("metadata.json"))
+labels = [metadata["names"][str(i)] for i in range(len(metadata["names"]))]
+Path("app/src/main/assets/ai/labels.json").write_text(
+    json.dumps({"sha256": hashlib.sha256(model.read_bytes()).hexdigest(), "labels": labels},
+               ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 ```
 
-- `objects`: 모든 검출 객체는 `bbox`와 `contour`를 담으며, `depth.onnx`를 통해 추정한 `distance_m`을 가진다.
-- `situations`: 확정된 위험이 아니라 **어떤 분석 모듈을 호출할지** 뜻한다.
-- 모델 가중치는 `models/active/`에 등록되어 있으며, 클래스는 모델의 `model.names`에서 동적으로 로드된다.
-
-## 7. AI 팀과 다음에 확정할 사항
-
-- 안드로이드 실기기(Kotlin/Chaquopy) 상에서의 실시간 프레임 버퍼 전달 및 TFLite/ONNX 실행 엔진 최종 융합
-- 2·3·4 상황 모듈(`tactile_context`, `walking_hazard`, `overhead_hazard`)의 세부 판단 구현. 1번은 이번 범위에서 제외
-- 상황 판단 결과 생성과 Kotlin TTS/진동 연결 구현. 공통 반환 항목은 contracts.md와 situation-handoff.md를 따른다
-
-## 클래스 기반 분석 대상 선택 추가
-Python build_frame은 situations 생략 시 2·3·4 분석 대상을 자동 선택한다. 규칙은 docs/contracts.md를 따른다. 전체 objects를 유지하며 위험 판단과 음성·진동은 수행하지 않는다. 카메라와 AI의 실시간 연결은 여전히 TODO다.
-
-2번 담당자의 상세 개발 안내와 공통 결과·우선순위 계약: [상황 판단 핸드오프](situation-handoff.md).
+## 현재 화면과 분석 범위
+Preview는 16:9 전체 영상이며 추론은 중앙 4:3만 사용한다. OverlayTransform은 이 중앙 crop 위치와 FIT_CENTER 여백을 복원한다. UI는 선택 시각 기준 1.2초 지난 검출을 지우고, 실제 안내 카드도 3초 후 지운다. 검출 표시 전환은 표시만 변경하며 추론·Python·피드백 실행 여부를 바꾸지 않는다. 일시정지·뒤로·백그라운드에서 세션을 정리하고 같은 화면에서 재시작한다.

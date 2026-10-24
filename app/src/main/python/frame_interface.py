@@ -1,4 +1,5 @@
 from typing import List, Optional, Dict, Any
+import json
 from detection import Detection
 import tactile_anomaly
 import tactile_context
@@ -123,3 +124,22 @@ def run_test(situation: str) -> List[Any]:
     # 버튼 연결 확인 전용: 실제 판단 대신 버튼이 지정한 상황으로 빈 함수를 호출한다.
     frame_data = build_frame(0, situations=[situation])
     return analyze(frame_data)
+
+
+def reset_session():
+    # 새 촬영 세션에서 이전 점형블록 안내 기록을 이어 쓰지 않는다.
+    tactile_context.reset_state()
+
+
+def analyze_json(frame_id: int, detections_json: str, image_width: int, image_height: int) -> str:
+    """Android의 실제 추론 결과를 공통 입력으로 바꾸고 판단 결과를 JSON으로 반환한다."""
+    objects = [Detection(**item) for item in json.loads(detections_json)]
+    frame = build_frame(
+        frame_id,
+        objects=objects,
+        image_width=image_width,
+        image_height=image_height,
+    )
+    # 2번 담당 모듈은 별도 너비 인자의 기본값 640을 사용한다.
+    # 모바일 입력은 crop·회전 후 640×480으로 맞춰 이 기존 계약을 유지한다.
+    return json.dumps(analyze(frame), ensure_ascii=False, allow_nan=False)
