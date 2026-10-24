@@ -238,7 +238,15 @@ class BlindWalkAIPipeline:
         frame_id와 이미지를 입력받아 Detection 목록을 산출하고, 공통 frame_data 딕셔너리로 반환한다.
         """
         detections = self.process_image(img_bgr)
-        return frame_interface.build_frame(frame_id=frame_id, objects=detections, situations=situations)
+        # 좌표가 복원된 입력 영상 크기를 전달한다. YOLO 텐서 크기와 구분한다.
+        height, width = img_bgr.shape[:2]
+        return frame_interface.build_frame(
+            frame_id=frame_id,
+            objects=detections,
+            situations=situations,
+            image_width=width,
+            image_height=height,
+        )
 
 
 if __name__ == "__main__":
