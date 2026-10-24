@@ -10,11 +10,11 @@ import androidx.compose.ui.graphics.Color
 import com.example.blindwalk.ui.CameraScreen
 import com.example.blindwalk.ui.theme.BlindWalkTheme
 
-// 가로 메인·카메라 화면을 공통 테마 안에서 실행한다.
+// 앱을 열면 가로 카메라 화면을 표시한다.
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge(statusBarStyle = SystemBarStyle.light(0, 0), navigationBarStyle = SystemBarStyle.light(0, 0))
-        setContent { BlindWalkTheme(darkTheme = false, dynamicColor = false) { Surface(color = Color.White) { CameraScreen() } } }
+        enableEdgeToEdge(statusBarStyle = SystemBarStyle.dark(0), navigationBarStyle = SystemBarStyle.dark(0))
+        setContent { BlindWalkTheme(darkTheme = true, dynamicColor = false) { Surface(color = Color.Black) { CameraScreen() } } }
     }
 }

@@ -3,7 +3,7 @@
 ## 프로젝트 목적
 ROKEY 부트캠프 스터디원 4명이 함께 개발하는 Android 온디바이스 AI 보행 보조 시제품이다.
 모두가 AI 모델 학습, 추론 결과 분석, 상황 판단 로직 개발에 참여한다.
-현재 코드는 실제 AI 기능이 구현되지 않은 Skeleton이며, 가로 UI와 카메라 입력 선택 연결점까지 제공한다.
+현재 코드는 가로 UI·카메라·실제 온디바이스 모델·Python 판단·공통 피드백을 연결한 시제품이다. 실제 보행 안전성과 거리 정확도는 검증 전이다.
 
 ## 최종적으로 만들 서비스
 스마트폰 카메라 영상에서 점자블록 및 보행 위험을 인식하고, 시각장애인에게 상황에 맞는 음성·진동 안내를 제공하는 온디바이스 시제품을 목표로 한다.
@@ -12,26 +12,26 @@ Kotlin은 CameraX·Compose UI·권한·진동·TTS와 Python 연결을 담당하
 목표 흐름은 `카메라 → 하나 이상의 AI 예측 → frame_interface.py → 해당 상황 모듈 → 판단 결과 → Kotlin 음성·진동 안내`이다.
 `frame_interface.py`는 같은 프레임의 예측을 공통 `objects`로 정리하고 `situations`를 결정한 뒤 해당 모듈을 직접 호출한다. 별도 situation_router.py는 만들지 않는다.
 세부 위험 판단은 담당 모듈에 둔다. 실제 모델 추론의 실행 언어와 엔진은 모델 선정 후 정하며, 동일 모델을 모듈마다 중복 실행하지 않는다.
-이것은 최종 목표 설명이다. 현재 본 앱은 가로 메인→시작→4:3 카메라→중지/뒤로→메인 흐름과 초당 최대 약5장 원본 프레임 선택을 구현한다. Python 인터페이스는 Detection 목록을 묶고 클래스명으로 2·3·4 분석 대상을 자동 선택한다. 2번 점형 주변 판단·3번 위치와 클래스 기반 안내·4번 돌출물 존재 안내는 Python에 구현했다. 본 앱과 AI의 연결·자동 피드백은 TODO다.
+이것은 최종 목표 설명이다. 현재 본 앱은 자동 가로 카메라 진입→같은 화면에서 일시정지/재시작 흐름과 초당 최대 약5장 원본 프레임 선택을 구현한다. Python 인터페이스는 Detection 목록을 묶고 클래스명으로 2·3·4 분석 대상을 자동 선택한다. 2번 점형 주변 판단·3번 위치와 클래스 기반 안내·4번 돌출물 존재 안내는 Python에 구현했다. 본 앱과 저장소 모델·Python 분석·공통 피드백을 연결했다. 실제 영상·기기 성능과 거리 정확도는 별도 검증 대상이다.
 
 ## 현재 카메라 입력 범위
 - CameraPreview.kt는 Preview30FPS 목표와 ImageAnalysis를 바인딩한다. 기기·조명에 따른 실제 FPS는 별도 검증한다.
 - FrameGate.kt가 단조 시각으로 직전 선택 후200ms 이상 지난 최신 프레임만 고른다. KEEP_ONLY_LATEST·전용 executor·finally close로 적체를 방지한다.
-- camera/AiFrameInput.kt의 onFrameSelected(frameId, image)가 향후 AI 연결점이다. 현재 본문은 TODO이며 모델·전처리·Python 전달을 하지 않는다.
-- 가로4:3은 cropRect와 rotationDegrees를 적용한 유효 영역이다. 원본 buffer와 모델 입력 텐서는 구분한다. 크기·정규화·색상 형식은 아직 미정이다.
+- camera/AiFrameInput.kt의 onFrameSelected(frameId, image)가 실제 AI 연결점이다. crop·회전 후 640×480으로 맞춰 Kotlin 추론을 실행하고 PythonBridge로 예측을 전달한다.
+- 화면은 16:9이며 cropRect와 rotationDegrees 적용 후 중앙 4:3을 추가 crop해 추론한다. 원본 buffer와 모델 입력 텐서는 구분한다. 현재 모바일 전처리·NCHW 계약은 docs/contracts.md를 따른다.
 - ImageProxy와 planes는 동기 콜백 안에서만 유효하며 반환 후 보관/접근하면 안 된다. AI 결과용 Python frame_data와 별개 계약이다.
 - AI 연결 작업 전 docs/ai-team-handoff.md의 파일별 흐름·원본 데이터 소유권·현재/향후 경계도 확인한다.
-- 메인 화면에서는 카메라를 사용하지 않고 중지·뒤로·백그라운드 시 프레임 선택과 카메라를 정리한다. jh-test 실험은 별개다.
+- 일시정지·뒤로·백그라운드 시 프레임 선택과 카메라를 정리하며 같은 화면에서 다시 시작한다. jh-test 실험은 별개다.
 
 ## Skeleton에서 실제 서비스로 전환할 때
 기존 일곱 테스트 버튼은 본 앱 UI에서 제거했다. Mock·Bridge·상황 모듈의 기존 테스트 함수는 보존되어 있지만 현재 화면에서는 호출하지 않는다.
-현재 시작 동작은 카메라와 프레임 선택까지만 실행한다. 실제 AI 인식·상황 판단·안내 연결은 아직 없다.
+현재 시작 동작은 카메라·프레임 선택·실제 모델·Python 분석·공통 안내까지 실행한다. 모델 정확도와 실제 보행 안전성은 보장하지 않는다.
 
 - `mock_inference.py`는 테스트 전용이다. 실제 추론 연결을 검증한 뒤 삭제하고 Mock을 실제 예측으로 사용하지 않는다.
-- `CameraScreen.kt`는 가로 메인/촬영·시작/중지 화면을 제공한다. 실제 판단 결과 안내 화면은 향후 추가한다.
-- `PythonBridge.kt`는 Android↔Python 연결로 유지한다. Mock 호출용 `infer()`와 버튼용 `analyze(situation)`는 실제 데이터·판단 결과를 전달하는 호출로 교체한다. 현재 `analyze(situation)`는 Python `run_test()`에 연결된 테스트 진입점이다.
+- `CameraScreen.kt`는 자동 촬영·일시정지/재시작 화면을 제공한다. 검출 영역과 선택된 판단 결과 문구도 표시한다.
+- `PythonBridge.kt`는 Android↔Python 연결로 유지한다. Mock 호출용 `infer()`와 버튼용 `analyze(situation)`는 실제 데이터·판단 결과를 전달하는 호출로 교체한다. 기존 analyze(situation)는 보존된 테스트 진입점이며 실제 앱은 analyzeFrame→analyze_json 경로를 사용한다.
 - `frame_interface.py`는 유지한다. 버튼 전용 `run_test()`는 삭제하고 실제 경로는 `build_frame → analyze`로 연결한다. 현재 build_frame은 전체 Detection 목록을 유지하고 situations 생략 시 2·3·4 분석 대상을 자동 선택한다.
-- 네 Python 상황 모듈과 진동·TTS 파일은 유지한다. 카메라 원본 선택 이후 실제 모델 추론과 결과 연결은 별도로 구현한다.
+- 네 Python 상황 모듈과 진동·TTS 파일은 유지한다. 현재 모바일은 Kotlin LiteRT·ONNX 추론과 결과 전달을 사용한다. Python 담당 모듈에서 모델을 중복 실행하지 않는다.
 - 테스트 전용 함수 제거 시 이를 참조하는 버튼·Bridge·테스트·문서를 함께 정리한다. 공통 분석 호출 테스트는 유지하고 실제 계약에 맞게 갱신한다.
 
 이 목록의 AI 관련 부분은 향후 전환 지침이다. 요청받지 않은 코드 삭제·실제 AI 인식·자동 안내를 미리 구현하지 않는다.
@@ -64,14 +64,14 @@ Kotlin은 CameraX·Compose UI·권한·진동·TTS와 Python 연결을 담당하
 공통 인터페이스나 다른 팀원 코드 수정이 필요하면 먼저 사용자에게 변경 내용과 영향을 설명한다.
 
 ## 공통 추론 규칙
-실제 모델 추론은 향후 공통 추론 계층에서 관리한다.
+실제 모델 추론은 Kotlin MobileInferenceEngine에서 공통으로 실행한다.
 각 상황 판단 모듈은 공통으로 전달받은 AI 결과를 분석한다.
 동일한 AI 모델을 여러 모듈이 중복 실행하지 않는 것을 원칙으로 한다.
-모델 및 실행 구조가 미정이므로 현재 추론 프레임워크를 추가하지 않는다.
+저장소 모델 실행을 위해 LiteRT 1.4.2·ONNX Runtime Android 1.24.3만 사용한다. 새 엔진·모델 추가는 별도 요청 범위다.
 
 ## 공통 데이터 계약
 모든 Python 상황 모듈은 `analyze(frame_data)` 함수를 따른다. `Detection.distance_m`은 거리 추정 불가 시 `None`이며 임의의 기본 거리로 대체하지 않는다. 점형 판단은 거리 미상·음수·비유한 값을 병합 전에 제외한다. `tactile_context`는 점형 주변 판단을 구현했으며 walking_hazard는 위치·클래스 기반 3번 안내를 구현했으며 4번은 overhang마다 돌출물 주의·CAUTION을 반환한다. 1번 모듈만 TODO 상태다.
-공통 입력은 `frame_id`, `objects`, `situations`를 가진 Python 딕셔너리이며 반환은 판단 결과 목록이다. 결과 항목은 situation·object_id·message·priority를 가진 딕셔너리로 통일한다. priority는 INFO·CAUTION·URGENT다. 2·3·4번은 이 형식으로 반환하며 앱 전달은 미구현이다. 상황 모듈 개발 전 docs/situation-handoff.md도 읽는다.
+공통 입력은 `frame_id`, `objects`, `situations`를 가진 Python 딕셔너리이며 반환은 판단 결과 목록이다. 결과 항목은 situation·object_id·message·priority를 가진 딕셔너리로 통일한다. priority는 INFO·CAUTION·URGENT다. 2·3·4번은 이 형식으로 반환하며 PythonBridge가 공통 결과를 Kotlin으로 변환한다. 상황 모듈 개발 전 docs/situation-handoff.md도 읽는다.
 `situations`는 확정된 위험이 아니라 분석할 상황 종류의 목록이다. build_frame은 situations 생략 시 tactile_dot→TACTILE_CONTEXT, 지상 장애물 10종→WALKING_HAZARD, overhang→OVERHEAD_HAZARD를 자동 선택한다. 구체적 클래스 목록은 docs/contracts.md를 따른다. TACTILE_ANOMALY는 자동 선택하지 않는다. 직접 지정한 situations(빈 목록 포함)는 테스트 호환을 위해 유지한다.
 Kotlin의 PythonBridge는 호출과 결과 전달만 담당하고 판단 로직은 넣지 않는다. Kotlin의 별도 상황 인터페이스·모델 타입을 중복 유지하지 않는다.
 실제 모델 출력이 확정되면 공통 협의를 통해 변경할 수 있다.
@@ -153,4 +153,14 @@ walking_hazard는 image_width·image_height를 받아 객체 하단 15%와 점�
 overhead_hazard는 전체 objects에서 overhang만 골라 객체마다 돌출물 주의·CAUTION을 반환한다. 위치·거리·신뢰도로 추가 필터링하지 않으며 영상 크기가 없어도 동작한다. 하위 클래스 추측·충돌 임박 판단·TTS·진동·반복 제한은 수행하지 않는다.
 
 ## 공통 안내 처리
-feedback/FeedbackCoordinator.kt는 Kotlin 결과 목록을 받아 등급·최근 안내 기록으로 하나를 선택한다. 메인 스레드에서 세션 동안 한 인스턴스를 유지하고 중지 시 reset한다. 최근 기록은 메모리만 사용한다. 실제 PythonBridge 변환·화면 연결은 미구현이다. 작업 전 docs/feedback-coordinator.md를 읽는다. 2번 모듈의 자체 쿨다운은 담당자 협의 없이 수정하지 않는다.
+feedback/FeedbackCoordinator.kt는 Kotlin 결과 목록을 받아 등급·최근 안내 기록으로 하나를 선택한다. 메인 스레드에서 세션 동안 한 인스턴스를 유지하고 중지 시 reset한다. 최근 기록은 메모리만 사용한다. PythonBridge 변환과 CameraScreen의 submit 호출을 연결했다. 작업 전 docs/feedback-coordinator.md를 읽는다. 2번 모듈의 자체 쿨다운은 담당자 협의 없이 수정하지 않는다.
+
+## 모바일 추론 연결
+MobileInferenceEngine은 실제 NCHW 입력·출력 shape 및 가중치 SHA-256과 labels.json을 검증한다. 640×480은 2번 모듈의 기존 너비 계약을 유지하기 위한 모바일 분석 해상도다. 모바일 ByteTrack은 없고 객체 ID는 프레임 내 후보 번호다. 2번 쿨다운과 공통 안내의 ID 기반 반복 제한은 이 한계를 가진다. 모델 자원은 분석 executor에서 닫고 중지된 세션의 결과는 UI에 전달하지 않는다.
+
+
+## 현재 GPU 실행 정책
+YOLO는 LiteRT GPU Delegate 우선이며 실패 시 CPU로 복귀한다. depth.onnx는 ONNX Runtime CPU 실행이다. GPU 자원의 생성·호출·해제는 동일한 분석 executor에서 수행한다. 실제 backend와 연산 위임 로그를 확인하며 GPU 사용만으로 전체 파이프라인5FPS 또는 정확도 검증 완료를 주장하지 않는다. 측정 조건과 결과는 README.md를 참고한다.
+
+## 현재 카메라 UI 계약
+화면은 16:9 전체 영상, 추론 입력은 중앙 4:3 crop 후 640×480이다. 넓은 화면 양옆은 분석하지 않는다. AiFrameResult로 검출 목록과 단조 선택 시각, Python 판단 결과를 함께 반환한다. 검출 표시는 1.2초, 안내 카드는 3초 후 제거한다. ID는 프레임 간 추적에 사용하지 않는다. 로고 메인 화면·앱명 옆 장식·카드 왼쪽 강조선은 사용하지 않는다.
