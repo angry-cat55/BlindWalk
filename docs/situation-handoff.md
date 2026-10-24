@@ -138,7 +138,7 @@ analyze는 우선순위 정렬·중복 제거 없이 결과를 합친다.
 신뢰할 수 있는 거리 정보가 확보된 후 거리 기반 동률 처리를 검토한다. 현재 2→3→4 합치기 순서를 위험 순위로 사용하지 않는다.
 
 목표 연결: results → PythonBridge → Kotlin 공통 안내 처리 → 화면 / TTS / 진동.
-현재 이 결과 전달 경로는 미구현이다. FeedbackCoordinator.kt도 아직 존재하지 않는다.
+현재 이 결과 전달 경로는 미구현이다. FeedbackCoordinator.kt의 공통 선택 로직은 구현했으나 Python 변환·화면 연결은 아직 없다. 자세한 사용법은 feedback-coordinator.md를 참고한다.
 
 ## 담당자와 AI 에이전트의 작업 체크
 

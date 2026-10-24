@@ -75,3 +75,5 @@ py -3.14 -m unittest discover -s app/src/test/python -v
 macOS/Linux는 ./gradlew와 python3.14를 사용한다.
 main을 pull한 후 feature/기능명에서 작업하고 PR로 검토받는다. 명시적 요청 없이 commit/push/merge하지 않는다.
 본 앱은 보행 안전성을 검증한 제품이 아니다. 미탐지·빈 결과는 안전을 의미하지 않는다.
+
+공통 안내 선택·반복 제한 컴포넌트는 구현했으나 앱과 Python 결과 연결은 아직 없다. 사용법과 메모리 정책은 [공통 안내 처리](docs/feedback-coordinator.md)를 참고한다.
