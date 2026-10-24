@@ -4,8 +4,7 @@
 
 feedback/FeedbackCoordinator.kt는 여러 상황의 결과에서 이번에 안내할 하나를 선택한다.
 파일·DB·Keystore를 사용하지 않고 최근 기록만 메모리에 보관한다.
-Python 결과를 Kotlin으로 변환하는 Bridge와 실제 카메라 화면 연결은 아직 구현하지 않았다.
-따라서 앱 실행만으로 이 안내가 자동 재생되지는 않는다.
+PythonBridge가 실제 결과를 Kotlin으로 변환하고 CameraScreen이 submit을 호출하도록 연결했다. 시작 후 선택된 안내는 실제 TTS·진동 함수에 전달된다. 실제 청취·기기 성능 검증은 별도다.
 
 ## 입력과 사용 흐름
 
@@ -18,7 +17,7 @@ Python의 결과 딕셔너리를 다음 Kotlin 자료형으로 변환해 전달�
 | message | message: String |
 | priority | priority: FeedbackPriority (INFO / CAUTION / URGENT) |
 
-변환 시 알 수 없는 등급·잘못된 자료형을 임의 등급으로 바꾸지 않는다. 변환 검증은 Bridge 연결 작업에서 구현한다.
+변환 시 알 수 없는 등급·잘못된 자료형을 임의 등급으로 바꾸지 않는다. 현재 Bridge는 JSON 필수 필드와 등급 이름을 검증하며 잘못된 형식은 프레임 오류로 전파한다.
 
 ```kotlin
 val speech = SpeechFeedback(context)
@@ -43,7 +42,7 @@ haptic.close()
 speech.close()
 ```
 
-이 예시는 향후 화면 연결용이며 현재 UI에 추가하지 않았다.
+현재 CameraScreen에서 위 연결을 유지한다. 일시정지 시 coordinator.reset과 진동 취소를 수행하며 TTS 엔진은 같은 화면에서 재사용한다. 화면 종료 시 TTS를 close한다. 상태 음성은 백그라운드에서 재시도하지 않으며 이미 선택된 위험 안내를 덮어쓰지 않는다.
 생성·submit·reset·SpeechFeedback 제어는 메인 스레드에서 수행한다.
 AI 결과가 분석 스레드에서 오면 메인 스레드로 전달한 뒤 submit한다.
 
@@ -70,7 +69,7 @@ isSpeaking은 재생 대기 상태도 포함한다. 완료·오류·중단 콜�
 
 ## 남은 작업과 제약
 
-- PythonBridge의 실제 results 변환 및 최신 프레임 전달.
-- 화면 상태 갱신과 생명주기에서 reset/close 호출.
+- 실제 보행 영상과 기기에서 PythonBridge 결과·음성·진동 검증.
+- 화면 상태 갱신과 reset/close는 연결했으며 빠른 시작·중지 검증을 유지한다.
 - 기존 tactile_context는 결과 생성 시 자체 3초 쿨다운을 적용한다. 공통 선택에서 밀린 결과도 잠시 숨겨질 수 있다. 2번 담당자와 중복 제한 책임을 조정해야 하며 이번 작업에서는 수정하지 않았다.
 - 실제 기기의 한국어 TTS·긴급 중단·진동 확인. 현재 단위 테스트는 가짜 출력 함수로 선택 정책을 검증한다.

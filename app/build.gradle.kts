@@ -43,6 +43,10 @@ chaquopy {
 }
 
 dependencies {
+    implementation(libs.litert)
+    implementation(libs.litert.gpu)
+    implementation(libs.litert.gpu.api)
+    implementation(libs.onnxruntime)
     implementation(libs.androidx.camera.camera2)
     implementation(libs.androidx.camera.lifecycle)
     implementation(libs.androidx.camera.view)
@@ -62,3 +66,14 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     debugImplementation(libs.androidx.compose.ui.tooling)
 }
+
+// 원본 가중치는 models/active 한 곳에 둔다. 빌드할 때만 앱 assets로 복사한다.
+val prepareAiAssets by tasks.registering(Sync::class) {
+    from(rootProject.file("models/active")) {
+        include("yolo11n_seg_18cls.tflite", "depth.onnx")
+        into("ai")
+    }
+    into(layout.buildDirectory.dir("generated/aiAssets"))
+}
+android.sourceSets["main"].assets.directories.add(layout.buildDirectory.dir("generated/aiAssets").get().asFile.absolutePath)
+tasks.named("preBuild").configure { dependsOn(prepareAiAssets) }
