@@ -145,3 +145,6 @@ PR 병합 후 다음 작업은 다시 `main 이동 → pull → 새 feature 생�
 Mock 출력과 실제 AI 예측을 구분한다.
 AI가 탐지하지 못했다는 이유로 보행환경이 안전하다고 판단하지 않는다.
 테스트하지 않은 기능을 정상 동작한다고 주장하지 않는다.
+
+## 공통 안내 처리
+feedback/FeedbackCoordinator.kt는 Kotlin 결과 목록을 받아 등급·최근 안내 기록으로 하나를 선택한다. 메인 스레드에서 세션 동안 한 인스턴스를 유지하고 중지 시 reset한다. 최근 기록은 메모리만 사용한다. 실제 PythonBridge 변환·화면 연결은 미구현이다. 작업 전 docs/feedback-coordinator.md를 읽는다. 2번 모듈의 자체 쿨다운은 담당자 협의 없이 수정하지 않는다.
