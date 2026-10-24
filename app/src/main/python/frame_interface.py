@@ -54,6 +54,9 @@ def build_frame(
     objects: Optional[List[Detection]] = None,
     situations: Optional[List[str]] = None,
     model_results: Optional[List[Detection]] = None,
+    *,
+    image_width: Optional[int] = None,
+    image_height: Optional[int] = None,
 ) -> Dict[str, Any]:
     """
     특정 frame_id에 해당하는 AI 검출 객체 목록(List[Detection])을 받아 공통 frame_data를 생성한다.
@@ -78,11 +81,19 @@ def build_frame(
 
     # 3. 같은 프레임의 식별자·전체 객체·분석 목록을 묶어서 반환한다.
     # 여기서는 모듈을 실행하지 않는다. 실행은 아래 analyze()의 역할이다.
-    return {
+    frame_data = {
         "frame_id": frame_id,
         "objects": target_objects,
         "situations": target_situations,
     }
+
+    # bbox·contour와 같은 좌표계의 영상 크기다. 모델 텐서 크기가 아니다.
+    # 기존 호출 형식은 유지하고, 크기를 제공한 호출에만 필드를 추가한다.
+    if image_width is not None and image_height is not None:
+        frame_data["image_width"] = image_width
+        frame_data["image_height"] = image_height
+
+    return frame_data
 
 
 def analyze(frame_data: Dict[str, Any]) -> List[Any]:
