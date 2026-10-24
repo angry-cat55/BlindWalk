@@ -1,0 +1,23 @@
+{
+  "sha256": "1e6527799c6372a82e82ca70adfdb81a738874bf5d8b3a5a003194571f491536",
+  "labels": [
+    "tactile_line",
+    "tactile_dot",
+    "stairs",
+    "curb",
+    "crosswalk",
+    "bollard",
+    "pole",
+    "tree_trunk",
+    "bicycle",
+    "movable_signage",
+    "vehicle",
+    "person",
+    "traffic_light",
+    "facility",
+    "overhang",
+    "elevator",
+    "elevator_sign",
+    "toilet_sign"
+  ]
+}

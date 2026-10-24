@@ -8,10 +8,10 @@
 
 | 파일명 | 모델 종류 | 포맷 | 크기 | 입력 규격 | 역할 및 활용 환경 |
 |---|---|---|---|---|---|
-| **`yolo11n_seg_18cls.pt`** | YOLO11n-seg (18 Classes Master) | PyTorch | 5.8 MB | 640×640 (RGB) | PC/연구용 인스턴스 세그멘테이션 & 트래킹 (`ai_pipeline.py`) |
-| **`yolo11n_seg_18cls.tflite`** | YOLO11n-seg (18 Classes Master) | TFLite FP32 | 11.2 MB | 640×640 (RGB) | **안드로이드 실기기(NPU/GPU 가속)** 앱 탑재용 (`assets`) |
+| **`yolo11n_seg_18cls.pt`** | YOLO11n-seg (18 Classes Master) | PyTorch | 5.8 MB | NCHW 1×3×640×640 (RGB) | PC/연구용 인스턴스 세그멘테이션 & 트래킹 (`ai_pipeline.py`) |
+| **`yolo11n_seg_18cls.tflite`** | YOLO11n-seg (18 Classes Master) | TFLite FP32 | 11.2 MB | NCHW 1×3×640×640 (RGB) | Android LiteRT GPU 우선 실행, 생성 assets에 포함 |
 | **`yolo11n_seg_16cls.pt`** | YOLO11n-seg (16 Classes Legacy) | PyTorch | 5.8 MB | 640×640 (RGB) | 16클래스 호환 가중치 |
-| **`yolo11n_seg_16cls.tflite`** | YOLO11n-seg (16 Classes Legacy) | TFLite FP32 | 11.9 MB | 640×640 (RGB) | 16클래스 호환 가중치 |
+| **`yolo11n_seg_16cls.tflite`** | YOLO11n-seg (16 Classes Legacy) | TFLite FP32 | 11.9 MB | 640×640 (RGB, 실제 shape 별도 확인) | 16클래스 호환 가중치 |
 | **`depth.onnx`** | MiDaS_small (Quantized) | ONNX | 16.2 MB | 256×256 (RGB) | 단안 깊이 추정 기반 정량적 미터 거리(`distance_m`) 산출 |
 
 ---
@@ -64,12 +64,15 @@ from ai_pipeline import BlindWalkAIPipeline
 
 # 활성 모델 로드
 pipeline = BlindWalkAIPipeline(
-    model_path="models/active/yolo11n_seg_16cls.pt",
+    model_path="models/active/yolo11n_seg_18cls.pt",
     depth_model_path="models/active/depth.onnx"
 )
 
 # 4:3 카메라 프레임 처리 (frame_id=1)
-frame_data = pipeline.process_frame(frame_id=1, image_bgr=camera_image)
+frame_data = pipeline.process_frame(frame_id=1, img_bgr=camera_image)
 # frame_data['objects'] 에 List[Detection] 담김
 ```
 
+
+## Android 연결에서 실제 확인한 규격
+18cls TFLite 입력은 FP32 NCHW [1,3,640,640]이며 출력은 [1,54,8400]과 [1,32,160,160]이다. 첫 네 채널은 정규화 cx/cy/w/h이고 점수는 sigmoid 완료 상태다. depth.onnx는 opset14·동적 양자화 ConvInteger 모델이며 출력 크기는 실행 후 읽는다. Android YOLO는 GPU Delegate를 우선 사용하고 실패 시 CPU로 복귀한다. depth.onnx는 CPU에서 실행한다. 미터 환산의 보정 정확도는 별도 검증 대상이다.
