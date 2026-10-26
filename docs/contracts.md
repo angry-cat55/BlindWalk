@@ -49,7 +49,7 @@ frame_data = {
 
 - `frame_id`: 같은 촬영 프레임의 예측을 묶는 식별자. (1, 2, 3...)
 - `objects`: 검출된 `Detection` 객체들의 리스트 (`List[Detection]`).
-  - `id`: PC 파이프라인에서는 ByteTrack 다중 객체 추적(MOT)의 추적 ID (`track_id`, 1, 2, ...). 유효한 추적값이 있는 경우 연속 프레임의 ID를 사용하며, 추적값이 없으면 프레임 내 순번으로 대체된다. 재시작·추적 단절 후 동일성을 보장하지 않는다.
+  - `id`: 모바일 실제 앱은 Kotlin ObjectTracker의 세션 추적 ID(1부터 증가)를 사용한다. 디코더의 후보 번호를 그대로 보내지 않는다. 연결 실패·만료 시 새 ID를 부여하고 같은 세션에서 재사용하지 않는다. PC는 Ultralytics ByteTrack ID를 쓰며 추적값이 없으면 프레임 내 순번으로 대체한다. 두 경로 모두 재시작·추적 단절 후 동일성을 보장하지 않는다.
   - `class_name`: PC에서는 model.names, 모바일에서는 모델 metadata에서 추출하고 SHA-256으로 확인한 labels.json을 사용하는 클래스명. (기본 활성 18종 Master: `tactile_line`, `tactile_dot`, `stairs`, `curb`, `crosswalk`, `bollard`, `pole`, `tree_trunk`, `bicycle`, `movable_signage`, `vehicle`, `person`, `traffic_light`, `facility`, `overhang`, `elevator`, `elevator_sign`, `toilet_sign`)
   - `confidence`: 검출 신뢰도 (0.0 ~ 1.0)
   - `distance_m`: `Optional[float]`. 깊이 추정 AI(`depth.onnx`) 기반 미터(m) 단위 추정 거리. 모델 없음·깊이 추론 실패·유효하지 않은 깊이값은 `None`이며 직렬화 시 `null`이다. 기본 거리로 대체하지 않는다. 거리 계산·직렬화에서는 정밀도를 유지하고, 표시 문구에서만 반올림한다. 점형 판단은 거리 미상·음수·비유한 값을 병합 전에 제외한다.
@@ -110,7 +110,7 @@ INFO는 환경 정보, CAUTION은 주의 필요, URGENT는 즉시 대응 필요�
 모듈별 등급을 고정하지 않는다. 각 모듈의 실제 조건과 임계값은 별도 검증한다.
 analyze는 목록을 합칠 뿐 등급 정렬·중복 제거·동률 처리를 하지 않는다.
 2·3·4번의 결과 생성·형식 테스트는 구현했다. PythonBridge가 실제 결과를 전달하고 CameraScreen이 공통 안내를 호출한다.
-객체 ID는 추적 실패 시 프레임 내 순번으로 대체될 수 있고, distance_m은 깊이 실패 시 None이다. 지속 ID·유효 미터 거리로 무조건 신뢰하지 않으며, 거리 미상은 5m 이내 판정이나 가장 가까운 대상 선정의 근거로 사용하지 않는다.
+모바일 객체 ID는 매칭 실패 시 새 추적 ID가 되고 PC는 추적값이 없으면 프레임 순번을 사용한다. distance_m은 깊이 실패 시 None이다. 지속 ID·유효 미터 거리로 무조건 신뢰하지 않으며, 거리 미상은 5m 이내 판정이나 가장 가까운 대상 선정의 근거로 사용하지 않는다.
 2번 담당자의 입력·구현 범위·반환 예시·남은 연결 작업은 [상황 판단 핸드오프](situation-handoff.md)를 참고한다.
 
 ## 3번 일반 보행 판단: 현재 구현
@@ -141,7 +141,19 @@ analyze는 목록을 합칠 뿐 등급 정렬·중복 제거·동률 처리를 �
 FeedbackCoordinator.submit(List<FeedbackResult>)는 이번에 발화 요청한 결과 하나 또는 null을 반환한다. PythonBridge.analyzeFrame이 실제 JSON 결과를 Kotlin 자료형으로 변환한다. 메모리 기반 중복 제한·등급 선택·TTS 사용법은 [공통 안내 처리](feedback-coordinator.md)를 따른다.
 
 ## Android 실제 추론 진입점
-PythonBridge.analyzeFrame → analyze_json(frame_id, detections_json, image_width, image_height) → Detection 생성 → build_frame → analyze → 4키 결과 JSON 반환. reset_session은 2번 담당 모듈의 reset_state를 호출한다. 모바일 후보 ID는 추적 ID가 아니며 좌표·영상 크기는 crop·회전 후 640×480이다. 모델/전처리·실행 한계는 ai-team-handoff.md를 따른다.
+ObjectTracker → PythonBridge.analyzeFrame → analyze_json(frame_id, detections_json, image_width, image_height) → Detection 생성 → build_frame → analyze → 4키 결과 JSON 반환. 현재 관측의 추적 ID가 Detection.id → 판단 object_id → FeedbackResult.objectId로 유지된다. reset_session은 2번 담당 모듈의 reset_state를 호출한다. 좌표·영상 크기는 crop·회전 후 640×480이다. 모델/전처리·실행 한계는 ai-team-handoff.md를 따른다.
+
+## 모바일 객체 추적
+
+- `ObjectTracker`는 모델 추론 후 AiFrameInput에서 실행하는 별도 Kotlin 단계다. PC는 외부 Ultralytics ByteTrack을 호출하므로 직접 이식하지 않았다. 이 추적기는 ByteTrack이 아니며 새 모델·의존성을 사용하지 않는다. 디코더 confidence0.25·NMS0.45·최대30개 정책을 유지한다. 따라서 낮은 점수 후보를 복원하거나 탐지 정확도를 높이지 않는다.
+- 같은 클래스만 연결하며 bbox 너비·높이 비율 각각0.5~2, 예측 bbox IoU≥0.15, 중심 거리/두 bbox 중 작은 대각선≤0.65를 요구한다. 비용은 `0.65*(1-IoU) + 0.25*정규화중심거리 + 0.10*(|ln너비비|+|ln높이비|)`다. 직전 업데이트에서 실제 관측된 활성 트랙을 먼저 연결하고, 활성 트랙과 매칭 조건을 만족하는 후보가 전혀 없는 탐지만 유실 트랙과 비교한다. 활성 트랙과 모호했던 관측은 유실 가설로 대신 연결하지 않는다. 각 단계에서 같은 트랙 또는 탐지를 공유하는 대안 비용이 선택 비용+0.08 이내이면 모호하므로 연결하지 않는다. 비용순 일대일 매칭으로 중복 할당을 막고 연결이 안 된 실제 탐지에 새 ID를 준다. 과거 유실 가설이 새 활성 트랙과 계속 경쟁해 ID가 반복 변경되는 것을 방지한다. 이 수치들은 실제 영상 검증 전 초기 기준이다.
+- 최근 두 실제 관측 중심의 이동/경과 초로 속도를 계산하고 현재 bbox 대각선의 초당2배로 제한한다. 등속 예측은 최대500ms까지만 내부 매칭에 사용하며 크기는 예측하지 않는다. 외형 특징·광학 흐름·장기 재식별은 없다.
+- 시각은 `onFrameSelected` 진입 시 `SystemClock.elapsedRealtime()` ms다. 프레임 수·카메라 timestamp·벽시각·추론 완료 시각을 사용하지 않는다. 실제 탐지와 연결됐을 때만 lastSeen을 해당 선택 시각으로 갱신한다. 빈 탐지/유실 보관/예측은 갱신하지 않는다.
+- 업데이트 시작 시 `현재 선택 시각 - lastSeen > 1000ms`인 기록을 먼저 만료한다. 정확히1000ms는 매칭 가능하고1001ms는 새 ID다. 빈 목록에서도 만료한다. 실제 처리 간격이1초를 넘으면 연속 탐지여도 ID가 끊긴다. 업데이트가 없는 동안 별도 타이머는 없지만 다음 업데이트에서 반드시 만료하며 종료 때 전부 해제한다.
+- 내부 상태는 마지막 bbox·클래스·속도·실제 관측 시각만 보관한다. 최대256개이며 초과하면 가장 오래 관측되지 않은 기록부터 제거한다. 현재200ms 선택 간격·프레임당 최대30개에서는 1000ms 경계 포함 최대180개로, 1초 내 기록이 용량으로 조기 제거되지 않는다. 향후 선택율/디코더 제한을 늘리면 이 상한도 함께 검토해야 한다. ID는 세션 내 증가하며 제거된 번호를 재사용하지 않는다. Int 범위 초과 시 순환 대신 오류 처리한다.
+- 반환은 현재 입력 탐지와 같은 개수·순서이며 `id`만 교체한다. bbox·contour·confidence·distance_m은 현재 관측값이다. 유실 객체를 UI나 Python 입력에 추가하지 않으며 유실 기록만으로 새 판단·TTS·진동을 만들지 않는다.
+- AiFrameInput 인스턴스마다 별도 상태를 소유한다. 중지·뒤로·백그라운드에서는 cancel/disposed로 늦은 결과를 폐기하고 기존 분석 executor에서 모델 해제와 tracker.reset을 실행한다. 재시작은 새 인스턴스다. Python 전역 상태는 이전 호출이 끝난 뒤 새 세션 첫 분석 때 초기화하며 취소된 이전 세션의 대기 호출을 차단한다. 종료 시에는 Python 전역 상태를 다시 지우지 않아 이미 시작한 새 세션에 간섭하지 않는다.
+- `ObjectTracking` 로그: frame, intervalMs(선택 프레임 간격), observed, new, reconnected(중간 업데이트에서 누락됐던 연결), expired, evicted, retained, selectionAgeMs(추론·추적까지 지연). 오탐·클래스 변경·급격한 이동·동종 교차에서 단절/오연결이 가능하다. TTS 반복 감소는 보장하지 않으며 문구/등급 변경은 별도 원인이다.
 
 ## 화면 검출 좌표
-Detection bbox/contour는 중앙 분석 영역의 640×480 좌표다. 화면 16:9 영상의 중앙 4:3 위치로 복원해 그리며 YOLO letterbox 패딩을 두 번 보정하지 않는다. 화면 양옆은 Preview에만 보이고 분석하지 않는다. Bitmap·ImageProxy를 UI로 넘기지 않는다. 객체 ID는 프레임 사이 추적에 사용하지 않으며 안내 대상 강조도 선택된 같은 프레임에만 적용한다.
+Detection bbox/contour는 중앙 분석 영역의 640×480 좌표다. 화면 16:9 영상의 중앙 4:3 위치로 복원해 그리며 YOLO letterbox 패딩을 두 번 보정하지 않는다. 화면 양옆은 Preview에만 보이고 분석하지 않는다. Bitmap·ImageProxy를 UI로 넘기지 않는다. 새 추론 결과(빈 결과 포함)가 오면 표시 목록 전체를 교체한다. 다음 결과 전에는 최신 실제 관측을 선택 시각 기준 최대1.2초 표시하는 기존 정책을 유지한다. 이는 유실 예측 표시가 아니며 매 카메라 프레임마다 지우지 않는다. 안내 대상 강조는 선택된 같은 결과 프레임에만 적용하며 안내 카드는 기존3초 정책을 유지한다.
