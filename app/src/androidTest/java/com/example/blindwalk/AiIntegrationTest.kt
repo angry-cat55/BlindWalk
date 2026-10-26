@@ -13,6 +13,7 @@ import com.example.blindwalk.feedback.SpeechFeedback
 import com.example.blindwalk.feedback.HapticFeedback
 import com.example.blindwalk.inference.MobileInferenceEngine
 import com.example.blindwalk.inference.Recognition
+import com.example.blindwalk.inference.ObjectTracker
 import java.nio.FloatBuffer
 import org.junit.Assert.*
 import org.junit.Test
@@ -22,6 +23,44 @@ import org.junit.runner.RunWith
 class AiIntegrationTest {
     private val instrumentation = InstrumentationRegistry.getInstrumentation()
     private val context = instrumentation.targetContext
+
+    @Test fun trackedObservationsAloneReachPythonAndKeepIdsThroughFeedback() {
+        val tracker = ObjectTracker()
+        val bridge = PythonBridge()
+        bridge.resetSession()
+        val actual = Recognition(500, "vehicle", .9f, listOf(280, 250, 360, 440), null, 2.1f)
+        val first = tracker.update(listOf(actual), 0)
+        val firstResults = bridge.analyzeFrame(1, first, 640, 480)
+        assertEquals(first.single().id, firstResults.single().objectId)
+        val missing = tracker.update(emptyList(), 400)
+        // 같은 목록이 화면 detections와 Python 입력에 사용된다. 유실 기록은 노출하지 않는다.
+        assertTrue(missing.isEmpty())
+        assertTrue(bridge.analyzeFrame(2, missing, 640, 480).isEmpty())
+        val current = actual.copy(id = 999, bbox = listOf(285, 250, 365, 440), distanceM = null,
+            confidence = .7f)
+        val linked = tracker.update(listOf(current), 800)
+        assertEquals(current.copy(id = first.single().id), linked.single())
+        val linkedResults = bridge.analyzeFrame(3, linked, 640, 480)
+        assertEquals(first.single().id, linkedResults.single().objectId)
+
+        instrumentation.runOnMainSync {
+            var now = 0L
+            var requests = 0
+            val coordinator = FeedbackCoordinator({ requests++; true }, { false }, {}, {}, { now })
+            assertEquals(first.single().id, coordinator.submit(firstResults)?.objectId)
+            now = 800
+            assertNull(coordinator.submit(linkedResults))
+            now = 3_000
+            assertNull(coordinator.submit(linkedResults))
+            now = 5_000
+            assertEquals(first.single().id, coordinator.submit(linkedResults)?.objectId)
+            assertEquals(2, requests)
+            coordinator.reset()
+        }
+        tracker.reset()
+        bridge.resetSession()
+        assertTrue(bridge.analyzeFrame(1, tracker.update(emptyList(), 0), 640, 480).isEmpty())
+    }
 
     @Test fun bundledModelsActuallyRunOnAndroid() {
         val bitmap = Bitmap.createBitmap(640, 480, Bitmap.Config.ARGB_8888)
