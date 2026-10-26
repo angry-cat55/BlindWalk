@@ -36,7 +36,7 @@ app/src/main/python/
 Python 인터페이스는 Detection 목록의 클래스명으로 2·3·4 분석 대상을 선택한다. 선택 자체는 위험 확정이 아니며 현재 본 앱 카메라의 실제 추론 결과에 연결되어 있다.
 
 ## 실제 실행 흐름
-CameraPreview → 200ms FrameGate → AiFrameInput → MobileInferenceEngine → PythonBridge → frame_interface.build_frame/analyze → FeedbackCoordinator → 화면 안내·TTS·진동.
+CameraPreview → 200ms FrameGate → AiFrameInput → MobileInferenceEngine → ObjectTracker → PythonBridge → frame_interface.build_frame/analyze → FeedbackCoordinator → 화면 안내·TTS·진동.
 
 - cropRect·회전을 적용한 16:9 영상의 중앙 4:3을 잘라 640×480 RGB로 맞춘다. 분석 전용 단일 스레드에서 실행하고 image는 finally에서 닫는다.
 - YOLO는 회색 letterbox 640×640·RGB/255·NCHW다. MiDaS는 256×256·ImageNet 정규화·NCHW다.
@@ -45,7 +45,7 @@ CameraPreview → 200ms FrameGate → AiFrameInput → MobileInferenceEngine →
 - 실제 bbox·한글 클래스명·점자블록 contour를 표시하고, 같은 프레임의 안내 대상만 강조한다. 경로선·거리·FPS는 표시하지 않는다.
 - 검출 표시는 선택 시각부터 1.2초 후 지우고 안내 카드는 새 안내 후 3초 뒤 지운다. 검출 표시만 끌 수 있으며 음성 판단에는 영향을 주지 않는다.
 - 모델 원본은 models/active에 두고 Gradle이 필요한 두 파일만 생성 assets로 복사한다.
-- 모바일 ByteTrack은 미구현이다. id는 프레임 내 후보 번호이며 동일 객체 추적을 보장하지 않는다.
+- 모바일은 경량 Kotlin ObjectTracker로 클래스·bbox·이동을 비교해 세션 추적 ID를 붙인다(ByteTrack 아님). 마지막 실제 관측의 단조 선택 시각부터 1초 이내이며 매칭 조건을 만족할 때만 ID를 연결한다. 1초 초과 시 만료하고 같은 세션에서 ID를 재사용하지 않는다. UI와 Python에는 현재 실제 탐지만 전달한다.
 - 모델 클래스 목록은 labels.json에 추출했고 SHA-256으로 가중치와 일치 여부를 확인한다. 가중치를 바꾸면 목록과 해시도 갱신해야 한다.
 - 깊이의 K=1000 미터 환산은 AI팀 PC 코드 기준이며 실제 거리 보정 정확도는 미검증이다. 거리 미상은 None으로 전달한다.
 
@@ -104,3 +104,7 @@ main을 pull한 후 feature/기능명에서 작업하고 PR로 검토받는다. 
 UI 변경 검증(2026-10-25): 빌드·Kotlin19개·Python101개·lint(오류0) 통과. 에뮬레이터 준비/일시정지 화면과 재시작 시 카메라 연결 확인. 에뮬레이터 Preview는 검정/준비 지연이 관측되어 실제 영상 검출 오버레이의 시각적 정합은 미검증이며 실기기에서 추가 확인이 필요하다.
 
 추가 로그 확인: 에뮬레이터가 실제 1280×720 프레임을 수신했고 YOLO·깊이 추론으로 객체1~2개를 반환했다. 에뮬레이터는 CPUfallback이며 수초의 추론 지연이 있어 1.2초를 넘는 검출 표시는 폐기한다. 실기기 검출 위치 정합·GPU 성능의 재확인은 아직 수행하지 않았다.
+
+객체 추적의 시간·매칭·자원 계약은 [contracts](docs/contracts.md#모바일-객체-추적)를 따른다. `ObjectTracking` 로그의 intervalMs는 실제 선택 프레임 간격, selectionAgeMs는 추론·추적까지의 지연이며 new/reconnected/expired/evicted/retained를 함께 기록한다. 추적 ID는 외형 재식별 결과가 아니며 교차·급격한 카메라 이동·클래스 변경 시 끊기거나 잘못 연결될 수 있다. 유실 객체를 그리지 않으므로 bbox 깜빡임을 없애지 않는다. TTS 반복 감소·실제 영상 성능은 별도 검증 대상이다.
+
+객체 추적 검증(2026-10-26): `assembleDebug`, Kotlin 단위35개(추적14개·추적/피드백2개 포함), `lintDebug`(오류0·경고30), Python 단위101개 통과. 호스트 Python3.14가 없어 PC 테스트는 설치된3.12로 실행했다. Medium_Phone 에뮬레이터(Android17)의 `AiIntegrationTest`4개도 통과하여 앱 내 Chaquopy Python3.14의 실제 ID 왕복·빈 입력·기존 모델 및 출력 API를 확인했다. GPU 벤치마크는 실행하지 않았다. 실영상·실기기 추적 정확도, 빠른 카메라 중지/재시작 경쟁조건의 자동 회귀 검증, 실제 청취·진동 체감·TTS 반복 감소는 미검증이다.

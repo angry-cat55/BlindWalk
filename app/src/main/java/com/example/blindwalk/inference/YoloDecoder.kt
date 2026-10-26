@@ -2,7 +2,7 @@ package com.example.blindwalk.inference
 
 import kotlin.math.*
 
-// Android 추론 결과다. id는 프레임 내 순번이며 ByteTrack 추적 ID가 아니다.
+// decode/infer 직후 id는 후보 번호다. 실제 앱은 ObjectTracker가 세션 추적 ID로 교체한다.
 data class Recognition(
     val id: Int,
     val className: String,

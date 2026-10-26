@@ -11,6 +11,8 @@ CameraScreen: 자동 시작·권한 확인
  → MobileInferenceEngine.infer
      YOLO11n-seg: 실제 객체·점자블록 마스크
      MiDaS: 상대 깊이와 AI팀 기준의 거리 환산
+ → ObjectTracker.update(현재 탐지, 단조 선택 시각 ms)
+     클래스·bbox·이동 기반 일대일 연결, 현재 관측의 id만 교체
  → PythonBridge.analyzeFrame
      Detection 목록을 JSON으로 Python에 전달
  → frame_interface.analyze_json
@@ -34,6 +36,7 @@ PC용 scripts/ai_pipeline.py는 별도 실행기다. 앱에서 이 Python 스크
 | camera/AiFrameInput.kt | 원본 crop·회전·RGB 크기 조절, 추론과 Python 분석 연결 |
 | inference/MobileInferenceEngine.kt | YOLO GPU 우선·ONNX CPU 추론, 입력·shape·클래스 해시 검증, 거리 환산 |
 | inference/YoloDecoder.kt | 정규화 xywh 복원·클래스별 NMS·점자블록 contour |
+| inference/ObjectTracker.kt | 모델과 별개인 세션 추적·1초 유실 기록·현재 관측 ID 부여 |
 | bridge/PythonBridge.kt | Detection JSON 전달과 4키 결과의 Kotlin 변환 |
 | Python frame_interface.py | Android JSON 진입점, build_frame, 상황 선택·호출 |
 | feedback/FeedbackCoordinator.kt | 등급·반복 제한 후 안내 하나 선택 |
@@ -68,9 +71,11 @@ classes는 app/src/main/assets/ai/labels.json에 metadata에서 추출했으며 
 ## 담당자 주의점
 
 - Detection 구조와 결과 4키 계약은 [contracts](contracts.md)를 따른다.
-- 모바일 id는 YOLO 프레임 내 후보 번호다. PC ByteTrack 결과와 구분하며 동일 객체 추적을 보장하지 않는다.
-- 기존 2번 모듈의 자체 쿨다운과 Coordinator의 ID 기반 반복 제한은 이 제약이 있다. 이번 연결에서 담당자 로직은 수정하지 않았다.
+- infer 직후 id는 후보 번호다. 실제 앱은 ObjectTracker에서 세션 추적 ID로 교체한 현재 관측 목록을 UI와 Python에 함께 전달한다. ByteTrack이 아닌 경량 Kotlin 추적이며 상세 매칭 기준은 [contracts](contracts.md#모바일-객체-추적)를 따른다.
+- 마지막 실제 관측 선택 시각(elapsedRealtime ms)에서1초 초과하면 만료한다. 빈 탐지에서도 만료하며 유실 보관·예측으로 시각을 연장하지 않는다. 세션 내 ID는 재사용하지 않으며 내부 기록은 최대256개다(현재 처리율의 1초 내 최대180개보다 여유). 유실 객체를 출력하지 않는다.
+- 기존 2번 모듈의 자체 쿨다운과 Coordinator의 반복 제한은 유지한다. 추적이 끊기거나 잘못 연결될 수 있으므로 실제 반복 감소는 검증 대상이다. 클래스·문구·등급 변화에 따른 반복은 ID 문제와 별개다.
 - 2번 세션 상태는 최초 분석 때 reset_session으로 초기화한다.
+- AiFrameInput은 취소된 세션의 Python 대기 호출을 막고 전역 Python 분석/초기화를 직렬화한다. 모델과 tracker는 같은 분석 executor에서 정리하며 새 세션은 별도 tracker를 소유한다.
 - [상황 핸드오프](situation-handoff.md), [공통 안내 처리](feedback-coordinator.md)를 함께 읽는다.
 - 합성 입력·검정 영상의 모델 실행 성공과 실제 보행 영상 정확도·실기기 FPS·한국어 음성 청취 검증을 구분한다.
 

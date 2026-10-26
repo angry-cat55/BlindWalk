@@ -9,7 +9,7 @@ class Detection:
     - 점자블록 및 일반 물체 모두 bbox와 contour를 지원한다.
     - distance_m은 Depth 추정 모델을 통해 산출된 미터 단위 추정 거리이다.
     """
-    id: int                                   # 프레임 내 객체 식별자 (1, 2, 3...)
+    id: int                                   # 모바일은 세션 추적 ID, PC는 ByteTrack ID/순번
     class_name: str                           # 모델에서 동적으로 인식된 클래스명
     confidence: float                         # 검출 신뢰도 (0.0 ~ 1.0)
     distance_m: Optional[float]               # 추정 거리(m). 추정 불가 시 None

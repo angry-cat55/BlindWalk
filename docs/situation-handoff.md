@@ -50,7 +50,7 @@ Detection은 app/src/main/python/detection.py에 있다.
 
 | 속성 | 형식·의미 |
 | --- | --- |
-| id | int, 추적 ID. 추적값이 없으면 현재 코드가 프레임 내 순번으로 대체하므로 항상 지속 ID라고 가정하면 안 됨 |
+| id | int, 모바일은 ObjectTracker 세션 추적 ID(마지막 실제 관측 후1초 이내 조건부 연결·세션 내 비재사용). PC는 ByteTrack ID이며 추적값이 없으면 프레임 순번으로 대체. 항상 지속 ID라고 가정하면 안 됨 |
 | class_name | str, 클래스명. 모델별 숫자 ID 대신 이 이름으로 비교 |
 | confidence | float, 객체 탐지 신뢰도. 위험 판단의 신뢰도와는 다름 |
 | distance_m | Optional[float], 추정 거리. 깊이 결과가 없거나 유효하지 않으면 None. 점형 판단에서는 병합 전에 제외 |

@@ -156,11 +156,11 @@ overhead_hazard는 전체 objects에서 overhang만 골라 객체마다 돌출�
 feedback/FeedbackCoordinator.kt는 Kotlin 결과 목록을 받아 등급·최근 안내 기록으로 하나를 선택한다. 메인 스레드에서 세션 동안 한 인스턴스를 유지하고 중지 시 reset한다. 최근 기록은 메모리만 사용한다. PythonBridge 변환과 CameraScreen의 submit 호출을 연결했다. 작업 전 docs/feedback-coordinator.md를 읽는다. 2번 모듈의 자체 쿨다운은 담당자 협의 없이 수정하지 않는다.
 
 ## 모바일 추론 연결
-MobileInferenceEngine은 실제 NCHW 입력·출력 shape 및 가중치 SHA-256과 labels.json을 검증한다. 640×480은 2번 모듈의 기존 너비 계약을 유지하기 위한 모바일 분석 해상도다. 모바일 ByteTrack은 없고 객체 ID는 프레임 내 후보 번호다. 2번 쿨다운과 공통 안내의 ID 기반 반복 제한은 이 한계를 가진다. 모델 자원은 분석 executor에서 닫고 중지된 세션의 결과는 UI에 전달하지 않는다.
+MobileInferenceEngine은 실제 NCHW 입력·출력 shape 및 가중치 SHA-256과 labels.json을 검증한다. 640×480은 2번 모듈의 기존 너비 계약을 유지하기 위한 모바일 분석 해상도다. infer 직후 ID는 후보 번호이며 AiFrameInput의 ObjectTracker가 세션 추적 ID로 교체한다(ByteTrack 아님). 마지막 실제 관측 선택 시각(elapsedRealtime ms)에서 1000ms 초과 시 만료하며, 같은 세션에서 ID를 재사용하지 않는다. 유실 기록은 최대256개이며 UI·Python에는 현재 관측만 전달한다. 세부 계약은 docs/contracts.md를 따른다. 2번 쿨다운과 공통 안내 정책은 유지하며 추적 ID도 객체 동일성을 보장하지 않는다. 모델·추적 상태는 분석 executor에서 닫고 중지된 세션의 결과는 UI에 전달하지 않는다.
 
 
 ## 현재 GPU 실행 정책
 YOLO는 LiteRT GPU Delegate 우선이며 실패 시 CPU로 복귀한다. depth.onnx는 ONNX Runtime CPU 실행이다. GPU 자원의 생성·호출·해제는 동일한 분석 executor에서 수행한다. 실제 backend와 연산 위임 로그를 확인하며 GPU 사용만으로 전체 파이프라인5FPS 또는 정확도 검증 완료를 주장하지 않는다. 측정 조건과 결과는 README.md를 참고한다.
 
 ## 현재 카메라 UI 계약
-화면은 16:9 전체 영상, 추론 입력은 중앙 4:3 crop 후 640×480이다. 넓은 화면 양옆은 분석하지 않는다. AiFrameResult로 검출 목록과 단조 선택 시각, Python 판단 결과를 함께 반환한다. 검출 표시는 1.2초, 안내 카드는 3초 후 제거한다. ID는 프레임 간 추적에 사용하지 않는다. 로고 메인 화면·앱명 옆 장식·카드 왼쪽 강조선은 사용하지 않는다.
+화면은 16:9 전체 영상, 추론 입력은 중앙 4:3 crop 후 640×480이다. 넓은 화면 양옆은 분석하지 않는다. AiFrameResult로 추적 ID를 붙인 현재 관측 목록과 단조 선택 시각, Python 판단 결과를 함께 반환한다. 검출 표시는 1.2초, 안내 카드는 3초 후 제거한다. 새 결과(빈 목록 포함)로 전체 검출을 교체하며 유실 트랙을 표시하지 않는다. 로고 메인 화면·앱명 옆 장식·카드 왼쪽 강조선은 사용하지 않는다.
