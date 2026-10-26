@@ -144,7 +144,7 @@ fun CameraScreen() {
                 onError = { reason -> pause(); error = reason },
                 onResults = { result ->
                     prepared = true
-                    // 오래된 프레임을 현재 위치처럼 그리지 않는다. 다음 프레임으로 ID를 유지하지 않는다.
+                    // 매 결과의 실제 관측 목록으로 교체한다. 유실 트랙으로 박스를 연장하지 않는다.
                     frame = result.takeIf { SystemClock.elapsedRealtime() - it.selectedAtMillis < 1_200 }
                     selectedId = null
                     coordinator.submit(result.feedback)?.let {
