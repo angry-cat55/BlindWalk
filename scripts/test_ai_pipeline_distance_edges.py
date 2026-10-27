@@ -237,7 +237,7 @@ class PipelineDistanceEdgesTest(unittest.TestCase):
             with self.subTest(boxes=boxes):
                 self.set_result(boxes)
                 self.assertEqual(self.pipeline.process_frame(19, self.image),
-                                 {"frame_id": 19, "objects": [], "situations": []})
+                                 {"frame_id": 19, "objects": [], "situations": [], "image_width": 64, "image_height": 48})
 
     def test_tracking_path_preserves_distance_and_tracker_id(self):
         self.pipeline.enable_tracking = True
