@@ -1,7 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 시스템 원형·둥근 사각형 마스크에서도 워드마크가 잘리지 않도록 여백을 둔다. -->
-<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:left="12dp" android:top="12dp" android:right="12dp" android:bottom="12dp">
-        <bitmap android:src="@drawable/blindwalk_wordmark" android:gravity="fill" android:filter="true" />
-    </item>
-</layer-list>
+<!-- Lucide Eye. 원형 마스크의 안전 영역에 심벌을 배치한다. 라이선스: assets/licenses/lucide.txt -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group android:translateX="33" android:translateY="33" android:scaleX="1.75" android:scaleY="1.75">
+        <path
+            android:fillColor="@android:color/transparent"
+            android:strokeColor="@android:color/white"
+            android:strokeWidth="2"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round"
+            android:pathData="M2.062,12.348a1,1 0,0 1,0 -0.696 10.75,10.75 0,0 1,19.876 0 1,1 0,0 1,0 0.696 10.75,10.75 0,0 1,-19.876 0" />
+        <path
+            android:fillColor="@android:color/transparent"
+            android:strokeColor="@android:color/white"
+            android:strokeWidth="2"
+            android:strokeLineCap="round"
+            android:pathData="M15,12a3,3 0,1 0,-6 0a3,3 0,1 0,6 0" />
+    </group>
+</vector>

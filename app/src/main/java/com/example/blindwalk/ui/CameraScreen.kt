@@ -137,7 +137,9 @@ fun CameraScreen() {
         }
     }
 
-    Box(Modifier.fillMaxSize().background(Color(0xFF0D1718))) {
+    BoxWithConstraints(Modifier.fillMaxSize().background(Color(0xFF0D1718))) {
+        // FIT_CENTER 영상의 왼쪽 여백만큼 이름을 옮긴다. 카메라 크기와 좌표는 유지한다.
+        val previewSidePadding = ((maxWidth - maxHeight * 16f / 9f) / 2f).coerceAtLeast(0.dp)
         if (running) {
             CameraPreview(Modifier.fillMaxSize().clearAndSetSemantics {},
                 onReady = { cameraReady = true },
@@ -162,8 +164,8 @@ fun CameraScreen() {
             verticalArrangement = Arrangement.SpaceBetween) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("BlindWalk", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 25.sp,
-                    modifier = Modifier.semantics { heading() })
+                Text("BlindWalk", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 22.sp,
+                    modifier = Modifier.padding(start = previewSidePadding).semantics { heading() })
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     TextButton(onClick = { showDetections = !showDetections },
                         colors = ButtonDefaults.textButtonColors(contentColor = Color.White),
