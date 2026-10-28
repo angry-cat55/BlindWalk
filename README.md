@@ -108,3 +108,9 @@ UI 변경 검증(2026-10-25): 빌드·Kotlin19개·Python101개·lint(오류0) �
 객체 추적의 시간·매칭·자원 계약은 [contracts](docs/contracts.md#모바일-객체-추적)를 따른다. `ObjectTracking` 로그의 intervalMs는 실제 선택 프레임 간격, selectionAgeMs는 추론·추적까지의 지연이며 new/reconnected/expired/evicted/retained를 함께 기록한다. 추적 ID는 외형 재식별 결과가 아니며 교차·급격한 카메라 이동·클래스 변경 시 끊기거나 잘못 연결될 수 있다. 유실 객체를 그리지 않으므로 bbox 깜빡임을 없애지 않는다. TTS 반복 감소·실제 영상 성능은 별도 검증 대상이다.
 
 객체 추적 검증(2026-10-26): `assembleDebug`, Kotlin 단위35개(추적14개·추적/피드백2개 포함), `lintDebug`(오류0·경고30), Python 단위101개 통과. 호스트 Python3.14가 없어 PC 테스트는 설치된3.12로 실행했다. Medium_Phone 에뮬레이터(Android17)의 `AiIntegrationTest`4개도 통과하여 앱 내 Chaquopy Python3.14의 실제 ID 왕복·빈 입력·기존 모델 및 출력 API를 확인했다. GPU 벤치마크는 실행하지 않았다. 실영상·실기기 추적 정확도, 빠른 카메라 중지/재시작 경쟁조건의 자동 회귀 검증, 실제 청취·진동 체감·TTS 반복 감소는 미검증이다.
+
+상단 겹침 수정(2026-10-28): 16:9 FIT_CENTER 영상의 검은 여백 경계가 앱 이름 중간을 통과하던 문제를 수정했다. 이전 투명 오버레이 구조를 유지하면서 이름을 영상 좌우 여백 너비만큼 안쪽으로 옮기고 25sp에서22sp로 줄였다. 불투명 상단 바는 사용하지 않으며 카메라·검출 오버레이의 전체 화면 크기·좌표와 AI 입력을 유지한다. 수정 후 실기기 시각 확인과 TalkBack 실제 탐색은 미검증이다.
+
+런처 아이콘은 사용자가 선택한 B안 파랑(#205DE3)과 C안 눈 심벌 조합이다. 적응형·원형·단색 및 구형 기기용 PNG에 반영했으며 Lucide Eye 라이선스는 app/src/main/assets/licenses/lucide.txt에 보관한다. 선택이 완료된 임시 HTML 후보는 삭제했다.
+
+최종 UI·아이콘 검증(2026-10-28): assembleDebug·Kotlin35개·lintDebug(오류0·경고25) 통과. 에뮬레이터 실행 화면에서 전체 카메라 영상 위로 이름만 안쪽에 이동한 배치와 Android 앱 정보의 파란 눈 아이콘을 확인했다. 실기기 설치·TalkBack 실제 탐색은 미검증이다.
