@@ -109,6 +109,10 @@ def analyze(frame_data):
             else:
                 location = "전방"
 
+        # 계단은 보행 진행 전방에 위치할 때만 안내 (좌/우측 계단 스킵)
+        if obj.class_name == "stairs" and location not in ("전방", "점자블록 위"):
+            continue
+
         label, priority = CLASS_POLICY[obj.class_name]
         results.append({
             "situation": "WALKING_HAZARD",

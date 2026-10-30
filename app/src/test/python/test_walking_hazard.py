@@ -123,6 +123,24 @@ class WalkingHazardTest(unittest.TestCase):
         invalid = detection("vehicle", [0, 0, float("inf"), 440])
         self.assertEqual(walking_hazard.analyze(self.frame(invalid)), [])
 
+    def test_stairs_only_announced_when_forward(self):
+        """계단은 전방(정면 또는 점자블록 위)에 위치할 때만 안내되고, 좌/우측 계단은 스킵되는지 검증"""
+        # 1. 전방 중앙 계단 -> 안내 정상 발생
+        forward_stairs = detection("stairs", [280, 250, 360, 440], object_id=1, distance=1.8)
+        res_forward = walking_hazard.analyze(self.frame(forward_stairs))
+        self.assertEqual(len(res_forward), 1)
+        self.assertEqual(res_forward[0]["message"], "전방 계단")
+
+        # 2. 좌측 계단 -> 스킵되어 결과 없음
+        left_stairs = detection("stairs", [20, 250, 100, 440], object_id=2, distance=1.8)
+        res_left = walking_hazard.analyze(self.frame(left_stairs))
+        self.assertEqual(len(res_left), 0)
+
+        # 3. 우측 계단 -> 스킵되어 결과 없음
+        right_stairs = detection("stairs", [520, 250, 600, 440], object_id=3, distance=1.8)
+        res_right = walking_hazard.analyze(self.frame(right_stairs))
+        self.assertEqual(len(res_right), 0)
+
 
 if __name__ == "__main__":
     unittest.main()
