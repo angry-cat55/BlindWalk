@@ -23,7 +23,10 @@ app/src/main/java/com/example/blindwalk/
 │   ├── FrameGate.kt           # 200ms 간격·지연 후 몰아보내기 방지
 │   └── AiFrameInput.kt        # 원본 crop·회전·640×480 변환·실제 추론/분석
 ├── bridge/PythonBridge.kt      # 실제 Detection JSON 전달·결과 변환
-└── feedback/                  # 공통 안내 선택·진동·TTS
+└── feedback/                  # 공통 안내 선택·진동·TTS·외부 햅틱(Bluetooth/USB)
+    └── UsbHapticManager.kt    # ESP32 블루투스 SPP 및 USB 시리얼 방향별(L/R/C) 햅틱 전송
+esp32_haptic/
+└── esp32_haptic.ino           # ESP32 좌(GPIO 27)·우(GPIO 25) 햅틱/LED 제어 펌웨어
 app/src/main/python/
 ├── frame_interface.py          # Detection 묶기·2/3/4 분석 대상 선택·모듈 호출
 ├── mock_inference.py           # 보존된 Mock 테스트 함수
@@ -36,7 +39,7 @@ app/src/main/python/
 Python 인터페이스는 Detection 목록의 클래스명으로 2·3·4 분석 대상을 선택한다. 선택 자체는 위험 확정이 아니며 현재 본 앱 카메라의 실제 추론 결과에 연결되어 있다.
 
 ## 실제 실행 흐름
-CameraPreview → 200ms FrameGate → AiFrameInput → MobileInferenceEngine → ObjectTracker → PythonBridge → frame_interface.build_frame/analyze → FeedbackCoordinator → 화면 안내·TTS·진동.
+CameraPreview → 200ms FrameGate → AiFrameInput → MobileInferenceEngine → ObjectTracker → PythonBridge → frame_interface.build_frame/analyze → FeedbackCoordinator → 화면 안내([◀ 좌측 / ▶ 우측 / ▲ 정면 햅틱] 시각화 포함)·TTS·진동(내장 진동 및 ESP32 방향별 햅틱).
 
 - cropRect·회전을 적용한 16:9 영상의 중앙 4:3을 잘라 640×480 RGB로 맞춘다. 분석 전용 단일 스레드에서 실행하고 image는 finally에서 닫는다.
 - YOLO는 회색 letterbox 640×640·RGB/255·NCHW다. MiDaS는 256×256·ImageNet 정규화·NCHW다.
@@ -114,3 +117,10 @@ UI 변경 검증(2026-10-25): 빌드·Kotlin19개·Python101개·lint(오류0) �
 런처 아이콘은 사용자가 선택한 B안 파랑(#205DE3)과 C안 눈 심벌 조합이다. 적응형·원형·단색 및 구형 기기용 PNG에 반영했으며 Lucide Eye 라이선스는 app/src/main/assets/licenses/lucide.txt에 보관한다. 선택이 완료된 임시 HTML 후보는 삭제했다.
 
 최종 UI·아이콘 검증(2026-10-28): assembleDebug·Kotlin35개·lintDebug(오류0·경고25) 통과. 에뮬레이터 실행 화면에서 전체 카메라 영상 위로 이름만 안쪽에 이동한 배치와 Android 앱 정보의 파란 눈 아이콘을 확인했다. 실기기 설치·TalkBack 실제 탐색은 미검증이다.
+
+## 외부 방향별 햅틱(ESP32) 연동 및 UI 시각화 (2026-10-30)
+
+- **방향별 외부 햅틱 전송 (UsbHapticManager)**: 선택된 안내 대상 객체의 화면 X좌표(좌측 1/3, 중앙 1/3, 우측 1/3)와 안내 문구를 판별하여 "L"(좌측), "R"(우측), "C"(정면/양쪽) 명령을 전송한다.
+- **이중 연결 지원 (Bluetooth SPP & USB Serial)**: 페어링된 ESP32 블루투스 기기(BlindWalk_Haptic 등)로 무선 전송하며, USB OTG 케이블 연결 시 시리얼(115200 bps)로도 자동 전송한다. 외부 기기 미연결 시에도 앱 내장 진동은 정상 동작한다.
+- **화면 안내 카드 햅틱 시각화 (CameraScreen)**: 시연 및 직관적 상태 확인을 위해 하단 안내 카드 메시지 앞에 [◀ 좌측 햅틱], [▶ 우측 햅틱], [▲ 정면 햅틱] 방향 배지를 함께 표시한다.
+- **보행자 및 좌·우 장애물 안내 범위 보완 (walking_hazard.py, FeedbackCoordinator)**: 보행자(person) 및 시설물(acility) 탐지 시에도 주의(CAUTION) 등급 및 햅틱 알림이 동작하도록 조정하고, 중앙 사다리꼴 외 좌·우 영역 객체에 대해서도 방향별(좌측/우측/전방) 안내를 생성한다.
