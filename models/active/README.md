@@ -1,78 +1,62 @@
 # 🤖 BlindWalk Active AI Models Specification
 
-본 디렉토리는 온디바이스 시각장애인 보행 보조 시스템 `BlindWalk`에서 실시간 인지 및 거리 추정을 위해 사용하는 **현재 기본 활성 모델(Active Models)**을 보관합니다.
+본 디렉토리는 온디바이스 시각장애인 보행 보조 시스템 `BlindWalk`에서 실시간 인지 및 거리 추정을 위해 사용하는 **현재 메인 활성 모델(Active Models)**을 보관합니다.
 
 ---
 
-## 1. 모델 파일 구성
+## 1. 활성 모델 파일 구성
 
 | 파일명 | 모델 종류 | 포맷 | 크기 | 입력 규격 | 역할 및 활용 환경 |
 |---|---|---|---|---|---|
-| **`yolo11n_seg_18cls.pt`** | YOLO11n-seg (18 Classes Master) | PyTorch | 5.8 MB | NCHW 1×3×640×640 (RGB) | PC/연구용 인스턴스 세그멘테이션 & 트래킹 (`ai_pipeline.py`) |
-| **`yolo11n_seg_18cls.tflite`** | YOLO11n-seg (18 Classes Master) | TFLite FP32 | 11.2 MB | NCHW 1×3×640×640 (RGB) | Android LiteRT GPU 우선 실행, 생성 assets에 포함 |
-| **`yolo11n_seg_16cls.pt`** | YOLO11n-seg (16 Classes Legacy) | PyTorch | 5.8 MB | 640×640 (RGB) | 16클래스 호환 가중치 |
-| **`yolo11n_seg_16cls.tflite`** | YOLO11n-seg (16 Classes Legacy) | TFLite FP32 | 11.9 MB | 640×640 (RGB, 실제 shape 별도 확인) | 16클래스 호환 가중치 |
-| **`depth.onnx`** | MiDaS_small (Quantized) | ONNX | 16.2 MB | 256×256 (RGB) | 단안 깊이 추정 기반 정량적 미터 거리(`distance_m`) 산출 |
+| **`yolo11s_seg_11cls.tflite`** | **YOLO11s-seg (11 Classes Main)** | TFLite FP32 | 38.7 MB | NCHW 1×3×640×640 (RGB) | 스마트폰 온디바이스 실시간 세그멘테이션 메인 모델 (NPU/GPU 가속) |
+| **`depth.onnx`** | **MiDaS v2.1 Small (Quantized)** | ONNX | 16.2 MB | NCHW 1×3×256×256 (RGB) | 단안 깊이 추정 기반 정량적 미터 거리(`distance_m`) 산출 모델 |
+
+> ※ 구버전 실험 모델(16클래스, 18클래스 Nano 모델)은 [`models/archive/`](../archive/) 디렉토리에 보관되어 있습니다.
 
 ---
 
-## 2. YOLO11n-seg 18클래스 최종 분류표 (Master)
+## 2. 메인 인지 모델: YOLO11s-seg (11 Classes)
 
-모델 가중치 내부의 `model.names` 딕셔너리에 등록된 공식 18개 클래스 분류 체계입니다:
+### 1) 모델 특성 및 배경
+- **백본 구조**: YOLO11s-seg (파라미터 9.4M, Nano 3.0M 대비 3.1배 확장)
+- **도입 목적**: 실외 원거리 점자블록 및 소형 장애물(볼라드, 입간판 등)의 검출 신뢰도 극대화 및 미탐 방지
+- **학습 데이터**: 20×20px 소실점 극소 노이즈가 제거된 정예 데이터셋 (`dataset_unified_11cls_pruned20px`, 7,474장)
+- **온디바이스 최적화**: 640×640 해상도, TFLite GPU Delegate 연동 및 BBox 국소 샘플링 결합으로 **추론 지연 207ms (4.8 FPS)** 달성
 
-| ID | 영문 클래스명 | 한국어 명칭 | 4대 상황 연계 | 설명 및 보행 보조 목적 |
-|:---:|---|---|:---:|---|
-| **0** | `tactile_line` | 선형 점자블록 | `TACTILE_ANOMALY` | 보행자의 연속적 직진 보행 경로를 유도하는 선형 점자블록 |
-| **1** | `tactile_dot` | 점형 점자블록 | `TACTILE_ANOMALY`<br>`TACTILE_CONTEXT` | 정지, 분기점, 계단/횡단보도 진입 전 위험 경고 랜드마크 |
-| **2** | `stairs` | 계단 | `TACTILE_CONTEXT`<br>`WALKING_HAZARD` | 오르막/내리막 계단 단차 및 낙상 위험 구역 |
-| **3** | `curb` | 연석 / 단차 | `WALKING_HAZARD` | 보도와 차도를 구분하는 경계석 및 수직 단차 (발 걸림 주의) |
-| **4** | `crosswalk` | 횡단보도 | `TACTILE_CONTEXT` | 차도 횡단용 횡단보도 구역 (보행 신호 및 방향 유도) |
-| **5** | `bollard` | 볼라드 | `WALKING_HAZARD`<br>`TACTILE_ANOMALY` | 보도 위 차량 진입 방지용 고정 말뚝 (무릎/정강이 충돌 주의) |
-| **6** | `pole` | 기둥 | `WALKING_HAZARD` | 전봇대, 신호등 기둥, 금속/콘크리트 가로 시설물 기둥 |
-| **7** | `tree_trunk` | 가로수 밑동 | `WALKING_HAZARD` | 보도 폭을 좁히는 가로수 몸통 및 돌출 뿌리 |
-| **8** | `bicycle` | 이륜 이동체 | `WALKING_HAZARD` | 보도에 방치/주행 중인 자전거, 전동 킥보드, 오토바이 |
-| **9** | `movable_signage`| 이동식 적재물 / 입간판 | `WALKING_HAZARD`<br>`TACTILE_ANOMALY` | 상가 앞 배너 입간판, 의자, 화분, 쇼핑카트 등 지면 장애물 |
-| **10**| `vehicle` | 도로/보도 차량 | `WALKING_HAZARD` | 정차/주차 또는 보도로 진입하는 자동차, 트럭, 버스 |
-| **11**| `person` | 보행자 | `WALKING_HAZARD` | 마주 오거나 앞서 걷는 일반 보행자 및 휠체어 이동약자 |
-| **12**| `traffic_light` | 신호등 | `TACTILE_CONTEXT` | 횡단보도 및 교차로의 보행자 신호등 기둥 |
-| **13**| `facility` | 공공 시설물 | `TACTILE_CONTEXT` | 버스 정류장 쉘터, 벤치, 우체통, 무인안내기(키오스크) |
-| **14**| `overhang` | 머리 높이 돌출물 | `OVERHEAD_HAZARD` | 보행자 머리 높이(지상 1.5m~2.2m)로 튀어나온 간판, 처마, 나뭇가지 |
-| **15**| `elevator` | 승강기 / 엘리베이터 | `TACTILE_CONTEXT` | 건물/지하철 엘리베이터 본체 및 출입문 |
-| **16**| `elevator_sign` | 엘리베이터 표지판 | `TACTILE_CONTEXT` | 승강기 탑승 위치를 안내하는 시각 표지판 |
-| **17**| `toilet_sign` | 화장실 표지판 | `TACTILE_CONTEXT` | 장애인/일반 화장실 위치 안내 표지판 |
+### 2) 11개 보행 특화 클래스 분류표 (`labels.json`)
 
----
-
-## 3. MiDaS Depth 모델 (`depth.onnx`) 규격 및 거리 산출 원리
-
-* **아키텍처**: Intel ISL `MiDaS_small` 경량 단안 깊이 추정 모델
-* **입력**: `256 × 256 × 3` (RGB, ImageNet 정규화)
-* **출력**: `1 × 256 × 256` (상대적 역심도 Disparity 맵)
-* **거리(`distance_m`) 환산 공식**:
-  1. 256×256 깊이 맵을 원본 4:3 해상도(640×480)로 선형 보간 리사이즈.
-  2. 검출된 객체의 마스크 다각형(`contour`) 내부 또는 바운딩 박스 중심 ROI의 깊이 중앙값($D_{med}$)을 추출.
-  3. 미터 거리 변환:
-     $$\text{distance\_m} = \text{round}\left(\frac{K}{D_{med} + \epsilon}, 2\right)$$
-     *(기본 $K=1000.0$, 최소 0.3m ~ 최대 15.0m 클리핑 적용)*
+| ID | 영문 클래스명 | 한국어 명칭 | 주요 보행 보조 및 안전 안내 기능 |
+|:---:|---|---|---|
+| **0** | `tactile_line` | 선형 점자블록 | 보행자의 직진 보행 경로 유도 및 이탈 경고 |
+| **1** | `tactile_dot` | 점형 점자블록 | 삼거리/직좌/직우 갈림길, 횡단보도/계단 진입 전 정지선 인지 |
+| **2** | `stairs` | 계단 | 전방 오르막/내리막 계단 진입 전 낙상 방지 안내 (전방 한정) |
+| **3** | `elevator` | 엘리베이터 | 건물 내부 및 지하철 승강기 출입구 인지 |
+| **4** | `crosswalk` | 횡단보도 | 차도 진입 전 보행 안전 횡단로 인지 |
+| **5** | `bollard` | 볼라드 | 보도 위 충돌 위험 고정 말뚝 감지 (무릎/정강이 충돌 방지) |
+| **6** | `movable_signage` | 입간판 / 적재물 | 상가 앞 배너, 화분, 의자 등 지면 장애물 충돌 방지 |
+| **7** | `facility` | 도로 시설물 | 버스정류장 부스, 벤치, 가로등 기둥 등 도로 시설물 감지 |
+| **8** | `bicycle` | 이륜차 | 보도 위 고속 접근 자전거, 오토바이, 킥보드 조기 경고 |
+| **9** | `vehicle` | 차량 | 차도 경계 및 인도 침범 불법 주정차 차량 회피 |
+| **10** | `person` | 보행자 | 마주 오거나 앞서 걷는 일반 보행자 및 휠체어 이용자 충돌 방지 |
 
 ---
 
-## 4. 파이썬 파이프라인 연동 예시
+## 3. 거리 추정 모델: MiDaS Small (`depth.onnx`)
 
-```python
-from ai_pipeline import BlindWalkAIPipeline
+- **아키텍처**: Intel ISL `MiDaS_small` 단안 역심도(Disparity) 추정 모델
+- **입력 규격**: `1 × 3 × 256 × 256` (RGB, ImageNet 정규화)
+- **출력 규격**: `1 × 256 × 256` (상대적 역심도 맵)
+- **거리 환산 공식**:
+  YOLO가 검출한 BBox 영역의 깊이 중앙값을 추출하여 실제 물리적 거리(m)로 변환:
+  $$\text{distance\_m} = \text{clip}\left(\frac{1.0}{\text{depth}_{avg} \times 0.0025 + 0.05}, 0.5, 10.0\right)$$
 
-# 활성 모델 로드
-pipeline = BlindWalkAIPipeline(
-    model_path="models/active/yolo11n_seg_18cls.pt",
-    depth_model_path="models/active/depth.onnx"
-)
+---
 
-# 4:3 카메라 프레임 처리 (frame_id=1)
-frame_data = pipeline.process_frame(frame_id=1, img_bgr=camera_image)
-# frame_data['objects'] 에 List[Detection] 담김
-```
-
-
-## Android 연결에서 실제 확인한 규격
-18cls TFLite 입력은 FP32 NCHW [1,3,640,640]이며 출력은 [1,54,8400]과 [1,32,160,160]이다. 첫 네 채널은 정규화 cx/cy/w/h이고 점수는 sigmoid 완료 상태다. depth.onnx는 opset14·동적 양자화 ConvInteger 모델이며 출력 크기는 실행 후 읽는다. Android YOLO는 GPU Delegate를 우선 사용하고 실패 시 CPU로 복귀한다. depth.onnx는 CPU에서 실행한다. 미터 환산의 보정 정확도는 별도 검증 대상이다.
+## 4. Android 온디바이스 텐서 입출력 사양
+- **YOLO11s-seg 입출력**:
+  - 입력: `[1, 3, 640, 640]` (Float32, RGB/255 정규화)
+  - 출력 1 (Boxes): `[1, 47, 8400]` (cx, cy, w, h 정규화 + 11개 클래스 점수 + 32채널 마스크 계수)
+  - 출력 2 (Prototypes): `[1, 32, 160, 160]` (프로토타입 마스크 텐서)
+- **후처리 임계값**:
+  - Confidence Threshold: **`0.25`**
+  - NMS IoU Threshold: **`0.45`**

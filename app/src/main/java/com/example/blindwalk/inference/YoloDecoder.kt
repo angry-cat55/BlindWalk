@@ -19,6 +19,7 @@ class YoloDecoder(
     private val candidateCount: Int = 8400,
     private val maskSize: Int = 160,
     private val maskChannels: Int = 32,
+    private val confThreshold: Float = 0.25f,
 ) {
     private data class Candidate(val index: Int, val label: Int, val score: Float, val box: List<Float>)
 
@@ -33,7 +34,7 @@ class YoloDecoder(
         for (i in 0 until candidateCount) {
             val label = labels.indices.maxBy { boxes[(4 + it) * candidateCount + i] }
             val score = boxes[(4 + label) * candidateCount + i]
-            if (!score.isFinite() || score < 0.25f) continue
+            if (!score.isFinite() || score < confThreshold) continue
 
             val cx = boxes[i] * 640
             val cy = boxes[candidateCount + i] * 640
