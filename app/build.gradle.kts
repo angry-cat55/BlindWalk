@@ -43,6 +43,7 @@ chaquopy {
 }
 
 dependencies {
+    implementation("com.github.mik3y:usb-serial-for-android:3.8.0")
     implementation(libs.litert)
     implementation(libs.litert.gpu)
     implementation(libs.litert.gpu.api)

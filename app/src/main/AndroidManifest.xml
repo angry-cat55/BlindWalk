@@ -10,6 +10,10 @@
             <action android:name="android.intent.action.TTS_SERVICE" />
         </intent>
     </queries>
+        <uses-permission android:name="android.permission.BLUETOOTH" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
     <application
         android:name="com.chaquo.python.android.PyApplication"
         android:allowBackup="true"

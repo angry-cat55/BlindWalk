@@ -153,6 +153,7 @@ fun CameraScreen() {
                         announcement = it
                         announcementAt = SystemClock.elapsedRealtime()
                         if (frame != null) selectedId = it.objectId
+                        haptic.vibrateDirectional(it, result.detections)
                     }
                 })
             if (showDetections) DetectionOverlay(frame?.detections.orEmpty(), selectedId, Modifier.fillMaxSize())

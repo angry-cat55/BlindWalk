@@ -4,11 +4,16 @@ import android.content.Context
 import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
+import com.example.blindwalk.inference.Recognition
 
 class HapticFeedback(context: Context) {
     private val vibrator = context.getSystemService(Vibrator::class.java)
+    private val externalHaptic = UsbHapticManager(context.applicationContext)
 
-    // 테스트용 짧은 진동을 한 번 실행한다. API 24~25도 지원한다.
+    init {
+        externalHaptic.connectIfNeeded()
+    }
+
     @Suppress("DEPRECATION")
     fun vibrate() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -16,8 +21,15 @@ class HapticFeedback(context: Context) {
         } else {
             vibrator.vibrate(150)
         }
+        externalHaptic.triggerPreparedPulse()
     }
 
-    // 화면 종료 시 진행 중인 진동을 중단한다.
-    fun close() { vibrator.cancel() }
+    fun vibrateDirectional(selected: FeedbackResult, detections: List<Recognition>) {
+        externalHaptic.vibrateForSelectedFeedback(selected, detections)
+    }
+
+    fun close() {
+        vibrator.cancel()
+        externalHaptic.close()
+    }
 }
