@@ -1,5 +1,6 @@
 package com.example.blindwalk.ui
 
+import android.graphics.Bitmap
 import android.graphics.Paint
 import androidx.compose.foundation.Canvas
 import androidx.compose.runtime.Composable
@@ -9,22 +10,41 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.blindwalk.inference.Recognition
 
 // 검출 표시는 시각 보조용이다. 음성은 기존 공통 안내 결과에서 선택한다.
 @Composable
-fun DetectionOverlay(objects: List<Recognition>, selectedId: Int?, modifier: Modifier = Modifier) {
+fun DetectionOverlay(
+    objects: List<Recognition>,
+    selectedId: Int?,
+    modifier: Modifier = Modifier,
+    frameBitmap: Bitmap? = null,
+) {
     Canvas(modifier.clearAndSetSemantics {}) {
         val transform = OverlayTransform.fit(size.width, size.height)
+
+        frameBitmap?.let { bmp ->
+            if (!bmp.isRecycled) {
+                drawImage(
+                    image = bmp.asImageBitmap(),
+                    dstOffset = IntOffset(transform.left.toInt(), transform.top.toInt()),
+                    dstSize = IntSize((640f * transform.scale).toInt(), (480f * transform.scale).toInt()),
+                )
+            }
+        }
+
         val green = Color(0xFF9CF2C7)
         val amber = Color(0xFFFFD27B)
         val text = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            textSize = 16.sp.toPx()
+            textSize = 12.sp.toPx()
             typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
         }
 
@@ -56,8 +76,9 @@ fun DetectionOverlay(objects: List<Recognition>, selectedId: Int?, modifier: Mod
             drawRoundRect(color, Offset(left, top), Size(right - left, bottom - top),
                 CornerRadius(6.dp.toPx()), style = Stroke((if (selected) 3f else 1.5f).dp.toPx()))
 
-            val label = koreanLabel(obj.className) + if (selected) " · 안내 대상" else ""
-            val pad = 7.dp.toPx()
+            val distanceText = obj.distanceM?.let { " · %.1fm".format(it) } ?: ""
+            val label = koreanLabel(obj.className) + distanceText + if (selected) " · 🎯 안내" else ""
+            val pad = 4.dp.toPx()
             val width = text.measureText(label) + pad * 2
             val height = text.fontMetrics.run { descent - ascent } + pad
             val x = left.coerceIn(0f, (size.width - width).coerceAtLeast(0f))
@@ -71,23 +92,23 @@ fun DetectionOverlay(objects: List<Recognition>, selectedId: Int?, modifier: Mod
 
 // 모델 클래스 순서와 무관하게 이름으로 표시하며, 알 수 없는 이름은 그대로 보여준다.
 private fun koreanLabel(name: String): String = when (name) {
-    "tactile_line" -> "선형 점자블록"
-    "tactile_dot" -> "점형 점자블록"
-    "stairs" -> "계단"
+    "tactile_line" -> "🟡 선형블록"
+    "tactile_dot" -> "🟡 점형블록"
+    "stairs" -> "🪜 계단"
     "curb" -> "연석"
-    "crosswalk" -> "횡단보도"
-    "bollard" -> "볼라드"
+    "crosswalk" -> "🚶 횡단보도"
+    "bollard" -> "🛑 볼라드"
     "pole" -> "기둥"
     "tree_trunk" -> "가로수"
-    "bicycle" -> "자전거·이동장치"
-    "movable_signage" -> "이동식 적재물"
-    "vehicle" -> "차량"
-    "person" -> "사람"
+    "bicycle" -> "🚲 자전거"
+    "movable_signage" -> "🪧 입간판"
+    "vehicle" -> "🚗 차량"
+    "person" -> "👤 사람"
     "traffic_light" -> "신호등"
-    "facility" -> "시설물"
+    "facility" -> "🏢 시설물"
     "overhang" -> "돌출물"
-    "elevator" -> "엘리베이터"
-    "elevator_sign" -> "엘리베이터 표지"
+    "elevator" -> "🛗 승강기"
+    "elevator_sign" -> "🛗 승강기 표지"
     "toilet_sign" -> "화장실 표지"
     else -> name
 }

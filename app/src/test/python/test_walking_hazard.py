@@ -69,12 +69,16 @@ class WalkingHazardTest(unittest.TestCase):
         self.assertEqual(walking_hazard.analyze(self.frame(block, obj)), [])
 
     def test_distance_does_not_change_priority_and_unknown_classes_are_ignored(self):
-        for distance in (None, 0.5, 100):
+        for distance in (None, 0.5, 1.8):
             objects = [detection("vehicle", [280, 250, 360, 440], distance=distance),
                        detection("overhang", [280, 250, 360, 440], object_id=2)]
             results = walking_hazard.analyze(self.frame(*objects))
             self.assertEqual(len(results), 1)
             self.assertEqual(results[0]["priority"], "URGENT")
+
+    def test_distance_beyond_two_meters_is_ignored(self):
+        objects = [detection("vehicle", [280, 250, 360, 440], distance=2.5)]
+        self.assertEqual(walking_hazard.analyze(self.frame(*objects)), [])
 
     def test_missing_size_and_invalid_boxes_return_empty(self):
         obj = detection("vehicle", [280, 250, 360, 440])

@@ -22,20 +22,22 @@ class TactileContextExtendedTest(unittest.TestCase):
 
     def test_selection_matrix_504_scenarios(self):
         # 해상도 4종 × 가로 위치 7종 × 거리 6종 × 세로 위치 3종.
+        max_d = tactile_context.MAX_VALID_DISTANCE_M
         for width in (360, 640, 900, 1280):
             for ratio in (0.1, 1 / 3 - 0.001, 1 / 3, 0.5, 2 / 3, 2 / 3 + 0.001, 0.9):
-                for distance in (-0.1, 0.1, 2.5, 4.999, 5.0, 5.001):
+                for distance in (-0.1, 0.1, max_d * 0.5, max_d - 0.001, max_d, max_d + 0.001):
                     for y in (20, 200, 460):
                         with self.subTest(width=width, ratio=ratio, distance=distance, y=y):
                             tactile_context.reset_state()
                             x = width * ratio
                             dot = self.dot(x=x, y=y, distance=distance)
-                            expected = width / 3 <= x <= width * 2 / 3 and 0 <= distance <= 5
+                            expected = width / 3 <= x <= width * 2 / 3 and 0 <= distance <= max_d
                             result = tactile_context.analyze({"objects": [dot]}, frame_width=width)
                             self.assertEqual(bool(result), expected)
 
     def test_nearest_target_in_200_generated_frames(self):
         rng = random.Random(20261024)
+        max_d = tactile_context.MAX_VALID_DISTANCE_M
         for case in range(200):
             with self.subTest(case=case):
                 tactile_context.reset_state()
@@ -45,7 +47,7 @@ class TactileContextExtendedTest(unittest.TestCase):
                                  round(rng.uniform(0.1, 6.5), 2)) for i in range(5)]
                 eligible = [dot for dot in dots
                             if width / 3 <= sum(dot.bbox[::2]) / 2 <= width * 2 / 3
-                            and dot.distance_m <= 5]
+                            and dot.distance_m <= max_d]
                 expected_id = min(eligible, key=lambda dot: dot.distance_m).id if eligible else None
                 rng.shuffle(dots)
                 result = tactile_context.analyze({"objects": dots}, frame_width=width)
@@ -54,7 +56,7 @@ class TactileContextExtendedTest(unittest.TestCase):
                     self.assertEqual(result[0]["object_id"], expected_id)
 
     def test_input_permutations_keep_nearest_target(self):
-        dots = [self.dot(1, 240, 80, 4.0), self.dot(2, 400, 250, 1.0),
+        dots = [self.dot(1, 240, 80, 1.9), self.dot(2, 400, 250, 1.0),
                 self.dot(3, 50, 400, 0.5)]
         for objects in itertools.permutations(dots):
             with self.subTest(ids=[dot.id for dot in objects]):
@@ -67,7 +69,7 @@ class TactileContextExtendedTest(unittest.TestCase):
         self.assertEqual(result, [])
 
     def test_middle_candidate_beyond_five_meters_does_not_enable_side_target(self):
-        result = tactile_context.analyze({"objects": [self.dot(distance=5.1), self.dot(2, 60, distance=0.5)]})
+        result = tactile_context.analyze({"objects": [self.dot(distance=2.5), self.dot(2, 60, distance=0.5)]})
         self.assertEqual(result, [])
 
     def test_bbox_overlap_alone_does_not_make_center_eligible(self):
@@ -77,7 +79,7 @@ class TactileContextExtendedTest(unittest.TestCase):
         self.assertEqual(tactile_context.analyze({"objects": [dot]}), [])
 
     def test_clustering_indirect_neighbors_is_order_independent(self):
-        dots = [self.dot(1, 280, distance=3.0), self.dot(2, 320, distance=2.0),
+        dots = [self.dot(1, 280, distance=1.8), self.dot(2, 320, distance=1.5),
                 self.dot(3, 360, distance=1.0)]
         for objects in itertools.permutations(dots):
             with self.subTest(ids=[dot.id for dot in objects]):

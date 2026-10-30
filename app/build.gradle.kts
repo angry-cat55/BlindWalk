@@ -71,7 +71,7 @@ dependencies {
 // 원본 가중치는 models/active 한 곳에 둔다. 빌드할 때만 앱 assets로 복사한다.
 val prepareAiAssets by tasks.registering(Sync::class) {
     from(rootProject.file("models/active")) {
-        include("yolo11n_seg_18cls.tflite", "depth.onnx")
+        include("yolo11s_seg_11cls.tflite", "depth.onnx")
         into("ai")
     }
     into(layout.buildDirectory.dir("generated/aiAssets"))

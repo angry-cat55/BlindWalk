@@ -13,6 +13,7 @@ CLASS_POLICY = {
     "movable_signage": ("적재물", "CAUTION"),
 }
 
+MAX_HAZARD_DISTANCE_M = 2.0
 FOOT_RATIO = 0.15
 OVERLAP_RATIO = 0.10
 SAMPLE_GRID = 10
@@ -82,8 +83,17 @@ def analyze(frame_data):
     for obj in objects:
         if obj.class_name not in CLASS_POLICY:
             continue
+
+        # 2.0m 거리 필터: 2.0m를 초과하는 원거리 장애물은 안내 대상에서 배제
+        if obj.distance_m is not None and obj.distance_m > MAX_HAZARD_DISTANCE_M:
+            continue
+
         foot = _foot_region(obj.bbox, width, height)
         if foot is None:
+            continue
+
+        # Depth 추정값이 없는 경우 화면 상단(원거리) 객체 배제
+        if obj.distance_m is None and foot[3] < height * 0.50:
             continue
 
         if _overlaps(foot, tactile_polygons):

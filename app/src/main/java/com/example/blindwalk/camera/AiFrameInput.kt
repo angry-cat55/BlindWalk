@@ -19,6 +19,7 @@ data class AiFrameResult(
     val selectedAtMillis: Long,
     val detections: List<Recognition>,
     val feedback: List<FeedbackResult>,
+    val frameBitmap: Bitmap? = null,
 )
 
 /** 카메라 원본 → Kotlin 추론 → 객체 추적 → Python 판단을 분석 스레드에서 동기 실행한다. */
@@ -74,7 +75,39 @@ class AiFrameInput(private val context: Context) {
             }
             if (cancelled.get()) return null
             // UI와 Python 모두 현재 관측 목록만 사용한다. 유실 트랙은 포함하지 않는다.
-            return AiFrameResult(frameId, selectedAt, detections, feedback)
+            val displayBitmap = frame.copy(Bitmap.Config.ARGB_8888, false)
+            return AiFrameResult(frameId, selectedAt, detections, feedback, displayBitmap)
+        } finally {
+            frame.recycle()
+        }
+    }
+
+    fun onBitmapFrame(frameId: Long, source: Bitmap): AiFrameResult? {
+        if (cancelled.get()) return null
+        val selectedAt = SystemClock.elapsedRealtime()
+        if (engine == null) {
+            engine = MobileInferenceEngine(context.applicationContext)
+        }
+        val area = AnalysisRegion.centered(source.width, source.height)
+        val cropped = Bitmap.createBitmap(source, area.left, area.top, area.width, area.height)
+        val frame = Bitmap.createScaledBitmap(cropped, 640, 480, true)
+        if (cropped !== source && cropped !== frame) cropped.recycle()
+
+        try {
+            val observations = engine!!.infer(frame)
+            if (cancelled.get()) return null
+            val detections = tracker.update(observations, selectedAt)
+            val feedback = synchronized(pythonSessionLock) {
+                if (cancelled.get()) return null
+                if (!pythonReady) {
+                    bridge.resetSession()
+                    pythonReady = true
+                }
+                bridge.analyzeFrame(frameId, detections, frame.width, frame.height)
+            }
+            if (cancelled.get()) return null
+            val displayBitmap = frame.copy(Bitmap.Config.ARGB_8888, false)
+            return AiFrameResult(frameId, selectedAt, detections, feedback, displayBitmap)
         } finally {
             frame.recycle()
         }
