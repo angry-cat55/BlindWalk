@@ -9,7 +9,7 @@ CLASS_POLICY = {
     "bollard": ("볼라드", "CAUTION"),
     "pole": ("기둥", "CAUTION"),
     "tree_trunk": ("가로수", "CAUTION"),
-    "bicycle": ("자전거", "CAUTION"),
+    "bicycle": ("이륜차", "CAUTION"),
     "movable_signage": ("적재물", "CAUTION"),
 }
 

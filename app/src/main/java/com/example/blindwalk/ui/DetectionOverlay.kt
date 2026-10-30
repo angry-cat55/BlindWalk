@@ -100,7 +100,7 @@ private fun koreanLabel(name: String): String = when (name) {
     "bollard" -> "🛑 볼라드"
     "pole" -> "기둥"
     "tree_trunk" -> "가로수"
-    "bicycle" -> "🚲 자전거"
+    "bicycle" -> "🛵 이륜차"
     "movable_signage" -> "🪧 입간판"
     "vehicle" -> "🚗 차량"
     "person" -> "👤 사람"
