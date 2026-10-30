@@ -247,11 +247,23 @@ def analyze(frame_data: Dict[str, Any], frame_width: int = 640) -> List[Dict[str
     if len(outgoing_branches) >= 2 or ("LEFT" in outgoing_branches and "RIGHT" in outgoing_branches):
         category = "BRANCH"
         if not _should_suppress_announcement(target_cluster, category, now):
-            branch_desc = "좌측 및 우측" if ("LEFT" in outgoing_branches and "RIGHT" in outgoing_branches) else ", ".join(outgoing_branches)
+            branch_set = set(outgoing_branches)
+            if {"LEFT", "RIGHT", "STRAIGHT"}.issubset(branch_set):
+                branch_desc = "삼거리"
+            elif "STRAIGHT" in branch_set and "LEFT" in branch_set:
+                branch_desc = "직진·좌측"
+            elif "STRAIGHT" in branch_set and "RIGHT" in branch_set:
+                branch_desc = "직진·우측"
+            elif "LEFT" in branch_set and "RIGHT" in branch_set:
+                branch_desc = "좌우"
+            else:
+                branch_desc = ""
+
+            msg_suffix = f"{branch_desc} 갈림길" if branch_desc else "갈림길"
             results.append({
                 "situation": "TACTILE_CONTEXT",
                 "object_id": target_cluster.primary_id,
-                "message": f"전방 {cluster_dist}m 앞 갈림길입니다 ({branch_desc} 방향).",
+                "message": f"🔀 {cluster_dist}m {msg_suffix}",
                 "priority": "CAUTION"
             })
             _record_announcement(target_cluster, category, now)
@@ -260,11 +272,12 @@ def analyze(frame_data: Dict[str, Any], frame_width: int = 640) -> List[Dict[str
     elif len(outgoing_branches) == 1 and outgoing_branches[0] in ("LEFT", "RIGHT"):
         category = "TURN"
         if not _should_suppress_announcement(target_cluster, category, now):
+            emoji = "↩️" if outgoing_branches[0] == "LEFT" else "↪️"
             direction_korean = "좌회전" if outgoing_branches[0] == "LEFT" else "우회전"
             results.append({
                 "situation": "TACTILE_CONTEXT",
                 "object_id": target_cluster.primary_id,
-                "message": f"전방 {cluster_dist}m 앞 {direction_korean} 유도 블록입니다.",
+                "message": f"{emoji} {cluster_dist}m {direction_korean}",
                 "priority": "CAUTION"
             })
             _record_announcement(target_cluster, category, now)
@@ -283,12 +296,13 @@ def analyze(frame_data: Dict[str, Any], frame_width: int = 640) -> List[Dict[str
             category = "FACILITY"
             if not _should_suppress_announcement(target_cluster, category, now):
                 fac_name = FACILITY_CLASSES.get(nearby_facility.class_name, "목적 시설")
+                msg = (f"🚸 {cluster_dist}m {fac_name} 앞"
+                       if nearby_facility.class_name.endswith("_sign")
+                       else f"🚸 {cluster_dist}m {fac_name} 정지선")
                 results.append({
                     "situation": "TACTILE_CONTEXT",
                     "object_id": nearby_facility.id,
-                    "message": (f"전방 {cluster_dist}m 앞 점형블록 주변에 {fac_name}가 있습니다."
-                                if nearby_facility.class_name.endswith("_sign")
-                                else f"전방 {cluster_dist}m 앞 {fac_name} 도착점(정지선)입니다."),
+                    "message": msg,
                     "priority": "INFO"
                 })
                 _record_announcement(target_cluster, category, now)
@@ -298,7 +312,7 @@ def analyze(frame_data: Dict[str, Any], frame_width: int = 640) -> List[Dict[str
                 results.append({
                     "situation": "TACTILE_CONTEXT",
                     "object_id": target_cluster.primary_id,
-                    "message": f"전방 {cluster_dist}m 앞 정지선입니다 (경로 종료).",
+                    "message": f"🛑 {cluster_dist}m 정지선",
                     "priority": "CAUTION"
                 })
                 _record_announcement(target_cluster, category, now)
@@ -309,7 +323,7 @@ def analyze(frame_data: Dict[str, Any], frame_width: int = 640) -> List[Dict[str
                 results.append({
                     "situation": "TACTILE_CONTEXT",
                     "object_id": target_cluster.primary_id,
-                    "message": f"전방 {cluster_dist}m 앞 점형블록이 있습니다.",
+                    "message": f"⚠️ {cluster_dist}m 점형블록",
                     "priority": "CAUTION"
                 })
                 _record_announcement(target_cluster, category, now)

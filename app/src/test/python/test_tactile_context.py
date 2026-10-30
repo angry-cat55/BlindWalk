@@ -103,7 +103,39 @@ class TactileContextTest(unittest.TestCase):
         self.assertEqual(res["situation"], "TACTILE_CONTEXT")
         self.assertEqual(res["object_id"], 101)  # 시설물 ID 참조
         self.assertEqual(res["priority"], "INFO")
-        self.assertIn("횡단보도 도착점(정지선)입니다", res["message"])
+        self.assertIn("횡단보도 정지선", res["message"])
+
+    def test_branching_combinations(self):
+        """삼거리(직좌우), 직좌, 직우, 좌우 갈림길 문구 판정 검증"""
+        foot_line = Detection(id=1, class_name="tactile_line", confidence=0.9, distance_m=1.0, bbox=[280, 320, 360, 480])
+        dot = Detection(id=2, class_name="tactile_dot", confidence=0.9, distance_m=1.8, bbox=[280, 260, 360, 320])
+        left = Detection(id=3, class_name="tactile_line", confidence=0.9, distance_m=1.8, bbox=[180, 270, 280, 310])
+        right = Detection(id=4, class_name="tactile_line", confidence=0.9, distance_m=1.8, bbox=[360, 270, 460, 310])
+        straight = Detection(id=5, class_name="tactile_line", confidence=0.9, distance_m=1.8, bbox=[280, 200, 360, 260])
+
+        # 1. 직좌우 -> 삼거리 갈림길
+        tactile_context.reset_state()
+        res = tactile_context.analyze({"objects": [foot_line, dot, left, right, straight]})
+        self.assertEqual(len(res), 1)
+        self.assertIn("삼거리 갈림길", res[0]["message"])
+
+        # 2. 직좌 -> 직진·좌측 갈림길
+        tactile_context.reset_state()
+        res = tactile_context.analyze({"objects": [foot_line, dot, left, straight]})
+        self.assertEqual(len(res), 1)
+        self.assertIn("직진·좌측 갈림길", res[0]["message"])
+
+        # 3. 직우 -> 직진·우측 갈림길
+        tactile_context.reset_state()
+        res = tactile_context.analyze({"objects": [foot_line, dot, right, straight]})
+        self.assertEqual(len(res), 1)
+        self.assertIn("직진·우측 갈림길", res[0]["message"])
+
+        # 4. 좌우 -> 좌우 갈림길
+        tactile_context.reset_state()
+        res = tactile_context.analyze({"objects": [foot_line, dot, left, right]})
+        self.assertEqual(len(res), 1)
+        self.assertIn("좌우 갈림길", res[0]["message"])
 
     def test_result_schema_conformance(self):
         """반환 결과가 docs/situation-handoff.md 공통 4대 키를 엄격히 준수하는지 검증"""
