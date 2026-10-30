@@ -53,7 +53,6 @@ fun CameraScreen() {
     var selectedId by remember { mutableStateOf<Int?>(null) }
     var announcement by remember { mutableStateOf<FeedbackResult?>(null) }
     var announcementAt by remember { mutableLongStateOf(0L) }
-    var hapticDir by remember { mutableStateOf("C") }
 
     // 화면의 음성 엔진은 유지하고, 일시정지 시 공통 안내의 세션 기록만 초기화한다.
     val speech = remember { SpeechFeedback(context) }
@@ -151,10 +150,10 @@ fun CameraScreen() {
                     frame = result.takeIf { SystemClock.elapsedRealtime() - it.selectedAtMillis < 1_200 }
                     selectedId = null
                     coordinator.submit(result.feedback)?.let {
-                        announcement = it
+                        val hDir = haptic.vibrateDirectional(it, result.detections)
+                        announcement = it.copy(message = hDir + it.message)
                         announcementAt = SystemClock.elapsedRealtime()
                         if (frame != null) selectedId = it.objectId
-                        hapticDir = haptic.vibrateDirectional(it, result.detections)
                     }
                 })
             if (showDetections) DetectionOverlay(frame?.detections.orEmpty(), selectedId, Modifier.fillMaxSize())
