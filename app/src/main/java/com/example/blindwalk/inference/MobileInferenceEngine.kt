@@ -35,10 +35,17 @@ class MobileInferenceEngine(context: Context, preferGpu: Boolean = true) : AutoC
         .let { names -> List(names.length()) { names.getString(it) } }
     private val decoder = YoloDecoder(labels)
     private val yoloInput = ByteBuffer.allocateDirect(3 * 640 * 640 * 4).order(ByteOrder.nativeOrder())
+    private val depthInput = ByteBuffer.allocateDirect(3 * 256 * 256 * 4).order(ByteOrder.nativeOrder())
     private val boxes = ByteBuffer.allocateDirect(47 * 8400 * 4).order(ByteOrder.nativeOrder())
     private val masks = ByteBuffer.allocateDirect(32 * 160 * 160 * 4).order(ByteOrder.nativeOrder())
     private val canvasBitmap = Bitmap.createBitmap(640, 640, Bitmap.Config.ARGB_8888)
     private val paint = Paint(Paint.FILTER_BITMAP_FLAG)
+
+    // 일괄 버퍼 전송용 캐싱 배열 (매 프레임 GC 및 JNI 오버헤드 방지)
+    private val yoloPixels = IntArray(640 * 640)
+    private val yoloFloats = FloatArray(3 * 640 * 640)
+    private val depthPixels = IntArray(256 * 256)
+    private val depthFloats = FloatArray(3 * 256 * 256)
 
     init {
         try {
@@ -53,7 +60,8 @@ class MobileInferenceEngine(context: Context, preferGpu: Boolean = true) : AutoC
             val fingerprint = digest.digest().joinToString("") { "%02x".format(it) }
             check(fingerprint == labelMetadata.getString("sha256")) { "모델과 클래스 목록이 일치하지 않습니다" }
             OrtSession.SessionOptions().use { options ->
-                options.setIntraOpNumThreads(2)
+                // 갤럭시 S25 Ultra 옥타코어(Snapdragon 8 Elite) 활용: 4개 고성능 코어로 확장
+                options.setIntraOpNumThreads(4)
                 depth = environment.createSession(context.assets.open("ai/depth.onnx").use { it.readBytes() }, options)
             }
         } catch (exception: Exception) {
@@ -73,7 +81,7 @@ class MobileInferenceEngine(context: Context, preferGpu: Boolean = true) : AutoC
         val canvas = Canvas(canvasBitmap)
         canvas.drawColor(Color.rgb(114, 114, 114))
         canvas.drawBitmap(frame, null, RectF(left, top, left + frame.width * gain, top + frame.height * gain), paint)
-        fillInput(canvasBitmap, yoloInput, normalize = false)
+        fillInput(canvasBitmap, yoloInput, yoloPixels, yoloFloats, normalize = false)
         boxes.rewind(); masks.rewind()
         runYolo()
         val yoloFinished = SystemClock.elapsedRealtime()
@@ -87,11 +95,14 @@ class MobileInferenceEngine(context: Context, preferGpu: Boolean = true) : AutoC
 
         // MiDaS는 letterbox가 아니라 PC 파이프라인과 같은 256×256 리사이즈다.
         val resized = Bitmap.createScaledBitmap(frame, 256, 256, true)
-        val input = ByteBuffer.allocateDirect(3 * 256 * 256 * 4).order(ByteOrder.nativeOrder())
-        try { fillInput(resized, input, normalize = true) }
-        finally { if (resized !== frame) resized.recycle() }
+        try {
+            fillInput(resized, depthInput, depthPixels, depthFloats, normalize = true)
+        } finally {
+            if (resized !== frame) resized.recycle()
+        }
 
-        OnnxTensor.createTensor(environment, input.asFloatBuffer(), longArrayOf(1, 3, 256, 256)).use { tensor ->
+        depthInput.rewind()
+        OnnxTensor.createTensor(environment, depthInput.asFloatBuffer(), longArrayOf(1, 3, 256, 256)).use { tensor ->
             depth.run(mapOf("input" to tensor)).use { outputs ->
                 val output = outputs[0] as OnnxTensor
                 val shape = output.info.shape
@@ -108,18 +119,47 @@ class MobileInferenceEngine(context: Context, preferGpu: Boolean = true) : AutoC
         }
     }
 
-    private fun fillInput(bitmap: Bitmap, target: ByteBuffer, normalize: Boolean) {
-        val count = bitmap.width * bitmap.height
-        val pixels = IntArray(count)
-        bitmap.getPixels(pixels, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height)
-        val means = floatArrayOf(0.485f, 0.456f, 0.406f)
-        val deviations = floatArrayOf(0.229f, 0.224f, 0.225f)
-        target.rewind()
-        // RGB 채널을 차례로 쓴 NCHW다. YUV 버퍼나 NHWC를 그대로 넘기지 않는다.
-        for (channel in 0..2) for (pixel in pixels) {
-            val value = ((pixel shr (16 - channel * 8)) and 255) / 255f
-            target.putFloat(if (normalize) (value - means[channel]) / deviations[channel] else value)
+    private fun fillInput(
+        bitmap: Bitmap,
+        target: ByteBuffer,
+        pixels: IntArray,
+        floats: FloatArray,
+        normalize: Boolean
+    ) {
+        val width = bitmap.width
+        val height = bitmap.height
+        val count = width * height
+        bitmap.getPixels(pixels, 0, width, 0, 0, width, height)
+        val offsetG = count
+        val offsetB = count * 2
+
+        if (normalize) {
+            // ImageNet 표준 정규화 (MiDaS 깊이 추정용)
+            val meanR = 0.485f; val devR = 0.229f
+            val meanG = 0.456f; val devG = 0.224f
+            val meanB = 0.406f; val devB = 0.225f
+
+            for (i in 0 until count) {
+                val pixel = pixels[i]
+                val r = ((pixel shr 16) and 255) / 255f
+                val g = ((pixel shr 8) and 255) / 255f
+                val b = (pixel and 255) / 255f
+                floats[i] = (r - meanR) / devR
+                floats[offsetG + i] = (g - meanG) / devG
+                floats[offsetB + i] = (b - meanB) / devB
+            }
+        } else {
+            // 단순 0..1 정규화 (YOLO용)
+            for (i in 0 until count) {
+                val pixel = pixels[i]
+                floats[i] = ((pixel shr 16) and 255) / 255f
+                floats[offsetG + i] = ((pixel shr 8) and 255) / 255f
+                floats[offsetB + i] = (pixel and 255) / 255f
+            }
         }
+
+        target.rewind()
+        target.asFloatBuffer().put(floats, 0, count * 3)
         target.rewind()
     }
 
@@ -130,17 +170,31 @@ class MobileInferenceEngine(context: Context, preferGpu: Boolean = true) : AutoC
         val marginX = if (contour == null) (box[2] - box[0]) / 4 else 0
         val marginY = if (contour == null) (box[3] - box[1]) / 4 else 0
 
-        // 깊이 맵 셀 중심에서 객체 마스크 또는 bbox 중앙 50% 영역을 샘플링한다.
-        // PC의 원본 크기 보간 후 중앙값과는 표본 해상도 차이가 있다.
-        for (y in 0 until dh) for (x in 0 until dw) {
-            val px = (x + 0.5f) * width / dw
+        val targetLeft = box[0] + marginX
+        val targetRight = box[2] - marginX
+        val targetTop = box[1] + marginY
+        val targetBottom = box[3] - marginY
+
+        // 256x256 전체 순회(6.5만 회) 대신 BBox 국소 영역만 탐색 (불필요 연산 95% 제거)
+        val minX = ((targetLeft.toFloat() * dw / width) - 1).toInt().coerceIn(0, dw - 1)
+        val maxX = ((targetRight.toFloat() * dw / width) + 1).toInt().coerceIn(0, dw - 1)
+        val minY = ((targetTop.toFloat() * dh / height) - 1).toInt().coerceIn(0, dh - 1)
+        val maxY = ((targetBottom.toFloat() * dh / height) + 1).toInt().coerceIn(0, dh - 1)
+
+        for (y in minY..maxY) {
             val py = (y + 0.5f) * height / dh
-            if (px < box[0] + marginX || px > box[2] - marginX ||
-                py < box[1] + marginY || py > box[3] - marginY) continue
-            if (contour != null && !contains(contour, px, py)) continue
-            val value = values[y * dw + x]
-            if (value.isFinite() && value > 0) samples += value
+            if (py < targetTop || py > targetBottom) continue
+            val rowOffset = y * dw
+
+            for (x in minX..maxX) {
+                val px = (x + 0.5f) * width / dw
+                if (px < targetLeft || px > targetRight) continue
+                if (contour != null && !contains(contour, px, py)) continue
+                val value = values[rowOffset + x]
+                if (value.isFinite() && value > 0) samples += value
+            }
         }
+
         if (samples.isEmpty()) return null
         samples.sort()
         val middle = samples.size / 2

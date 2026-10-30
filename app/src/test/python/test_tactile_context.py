@@ -137,6 +137,24 @@ class TactileContextTest(unittest.TestCase):
         self.assertEqual(len(res), 1)
         self.assertIn("좌우 갈림길", res[0]["message"])
 
+    def test_wide_cluster_offset_straight_branch(self):
+        """가로로 넓은 점형 클러스터에서 직진 블록의 중심 x좌표가 편향(offset)되어도 직좌로 정확히 판정되는지 검증"""
+        # 점형 클러스터 폭: 350px (중심: 355, 300)
+        dot = Detection(id=1, class_name="tactile_dot", confidence=0.9, distance_m=1.8, bbox=[180, 280, 530, 320])
+        foot_line = Detection(id=2, class_name="tactile_line", confidence=0.9, distance_m=1.0, bbox=[300, 320, 380, 480])
+
+        # 직진 블록: x좌표가 좌측으로 60px 치우침 (중심: 295, 242.5 -> dx = -60px)
+        offset_straight = Detection(id=3, class_name="tactile_line", confidence=0.85, distance_m=1.9, bbox=[260, 210, 330, 275])
+
+        # 좌측 분기선: 점형 클러스터 좌측 바깥으로 뻗음
+        left = Detection(id=4, class_name="tactile_line", confidence=0.9, distance_m=1.9, bbox=[80, 280, 180, 320])
+
+        tactile_context.reset_state()
+        res = tactile_context.analyze({"objects": [foot_line, dot, offset_straight, left]})
+        self.assertEqual(len(res), 1)
+        # 과거 알고리즘에서는 dx=-60으로 인해 직진이 좌회전으로 오분류되었으나, 기하학적 접촉 면 알고리즘에서는 직진·좌측으로 정상 판정
+        self.assertIn("직진·좌측 갈림길", res[0]["message"])
+
     def test_result_schema_conformance(self):
         """반환 결과가 docs/situation-handoff.md 공통 4대 키를 엄격히 준수하는지 검증"""
         dot = Detection(id=5, class_name="tactile_dot", confidence=0.95, distance_m=1.8, bbox=[280, 280, 360, 340])

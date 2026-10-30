@@ -173,6 +173,69 @@ def _find_active_footpath(linear_blocks: List[Detection], target_bbox: List[int]
     return max(candidates, key=lambda line: line.bbox[3]) if candidates else None
 
 
+def _classify_branch_direction(target_cluster: DotCluster, line: Detection, touch_margin: int = 45) -> Optional[str]:
+    """
+    타겟 점형 클러스터에서 뻗어나가는 선형 블록 가지의 방향(STRAIGHT / LEFT / RIGHT)을
+    단순 중심점 거리(dx, dy)가 아닌 '접촉 면(Face of Contact)'과 공간 기하학에 기반하여 엄격히 판정한다.
+    """
+    # 1. 기본적인 바운딩 박스 접촉(마진 포함) 검사
+    if not _boxes_touch(target_cluster.bbox, line.bbox, margin=touch_margin):
+        return None
+
+    tx1, ty1, tx2, ty2 = target_cluster.bbox
+    lx1, ly1, lx2, ly2 = line.bbox
+    lcx, lcy = _box_center(line.bbox)
+    tcx, tcy = target_cluster.center
+
+    dx = lcx - tcx
+    dy = lcy - tcy
+
+    # 점형 클러스터보다 명확히 아래쪽(발밑/진입선 방향)에 위치한 블록은 분기 가지가 아님
+    if lcy > tcy and ly2 > ty2 + 15 and (ly1 >= ty1 + 10 or dy > abs(dx)):
+        return None
+
+    # 기하학적 접촉 면 조건 계산
+    # A. 전방 직진 (STRAIGHT):
+    # - 선형 블록이 점형 클러스터 상단(전방)에 위치 (ly1 < ty1 + 20 및 lcy < tcy)
+    # - 선형 블록의 x좌표 범위가 점형 클러스터의 가로 범위 [tx1, tx2] 내부에 포함되거나,
+    #   중심 축 정렬 (lcx가 tx1 - 35 ~ tx2 + 35 범위 내)
+    # - 수평으로 크게 돌출된 좌우 분기선(lx1 < tx1 - 40 또는 lx2 > tx2 + 40)이 아니어야 함
+    is_front = (lcy < tcy) and (ly1 < ty1 + 20)
+    in_cluster_x_span = (lx1 >= tx1 - 35) and (lx2 <= tx2 + 35)
+    in_aligned_center = (tx1 - 25 <= lcx <= tx2 + 25)
+
+    if is_front and (in_cluster_x_span or (in_aligned_center and dy < -15)):
+        if not (lx1 < tx1 - 40 and abs(dx) > abs(dy)) and not (lx2 > tx2 + 40 and abs(dx) > abs(dy)):
+            return "STRAIGHT"
+
+    # B. 좌측 분기 (LEFT):
+    # - 선형 블록이 점형 클러스터 좌측 바깥(lx1 < tx1 - 5)으로 전개되거나, 중심이 좌측에 위치 (lcx < tcx - 20)
+    # - 선형 블록 우측단이 점형 클러스터 좌측면과 접촉 (lx2 >= tx1 - touch_margin)
+    # - 세로 범위가 점형 클러스터 높이와 마진 내에서 겹침
+    vertical_overlap = min(ly2, ty2) - max(ly1, ty1)
+    if (lx1 < tx1 - 5 or lcx < tcx - 25) and (lx2 >= tx1 - touch_margin):
+        if vertical_overlap >= -touch_margin or (abs(dx) > abs(dy)):
+            return "LEFT"
+
+    # C. 우측 분기 (RIGHT):
+    # - 선형 블록이 점형 클러스터 우측 바깥(lx2 > tx2 + 5)으로 전개되거나, 중심이 우측에 위치 (lcx > tcx + 20)
+    # - 선형 블록 좌측단이 점형 클러스터 우측면과 접촉 (lx1 <= tx2 + touch_margin)
+    # - 세로 범위가 점형 클러스터 높이와 마진 내에서 겹침
+    if (lx2 > tx2 + 5 or lcx > tcx + 25) and (lx1 <= tx2 + touch_margin):
+        if vertical_overlap >= -touch_margin or (abs(dx) > abs(dy)):
+            return "RIGHT"
+
+    # D. Fallback (점형 블록이 1개로 작아 가로/세로 범위 구분이 모호한 경우 상대 각도 판정)
+    if dy < -10 and abs(dx) <= abs(dy):
+        return "STRAIGHT"
+    elif dx < -20:
+        return "LEFT"
+    elif dx > 20:
+        return "RIGHT"
+
+    return None
+
+
 def analyze(frame_data: Dict[str, Any], frame_width: int = 640) -> List[Dict[str, Any]]:
     """
     frame_data 내 Detection 객체들을 분석하여 유효 거리(<=5.0m) 내 점형블록(클러스터) 기반
@@ -217,24 +280,15 @@ def analyze(frame_data: Dict[str, Any], frame_width: int = 640) -> List[Dict[str
     cluster_center = target_cluster.center
     cluster_dist = round(target_cluster.distance_m, 1)
 
-    # 5. 해당 타겟 점형 클러스터에서 뻗어나가는 선형 블록 가지(Spokes) 분석
+    # 5. 해당 타겟 점형 클러스터에서 뻗어나가는 선형 블록 가지(Spokes) 분석 (기하학적 접촉 면 판정)
     outgoing_branches = []
     for line in linear_blocks:
         if active_path and line.id == active_path.id:
             continue  # 내가 밟고 온 진입 경로는 제외
 
-        if _boxes_touch(target_cluster.bbox, line.bbox, margin=40):
-            line_center = _box_center(line.bbox)
-            dx = line_center[0] - cluster_center[0]
-            dy = line_center[1] - cluster_center[1]
-
-            # 클러스터 중심 기준 좌우 또는 전방으로 뻗은 가지인지 판별
-            if dx < -25:
-                outgoing_branches.append("LEFT")
-            elif dx > 25:
-                outgoing_branches.append("RIGHT")
-            elif dy < -10:
-                outgoing_branches.append("STRAIGHT")
+        branch = _classify_branch_direction(target_cluster, line, touch_margin=45)
+        if branch:
+            outgoing_branches.append(branch)
 
     outgoing_branches = sorted(list(set(outgoing_branches)))
 

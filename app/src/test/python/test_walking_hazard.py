@@ -32,7 +32,7 @@ class WalkingHazardTest(unittest.TestCase):
             "bollard": ("볼라드", "CAUTION"),
             "pole": ("기둥", "CAUTION"),
             "tree_trunk": ("가로수", "CAUTION"),
-            "bicycle": ("자전거", "CAUTION"),
+            "bicycle": ("이륜차", "CAUTION"),
             "movable_signage": ("적재물", "CAUTION"),
         }
         for name, (label, priority) in classes.items():
@@ -100,7 +100,7 @@ class WalkingHazardTest(unittest.TestCase):
         )
         self.assertEqual(frame["image_width"], 640)
         self.assertEqual(frame["image_height"], 480)
-        self.assertEqual(frame_interface.analyze(frame)[0]["message"], "전방에 자전거")
+        self.assertEqual(frame_interface.analyze(frame)[0]["message"], "전방에 이륜차")
 
     def test_overlap_threshold_and_multiple_contour_union(self):
         # 정확히 10%면 제외하고, 여러 블록 영역은 중복 없이 합산한다.
@@ -122,6 +122,24 @@ class WalkingHazardTest(unittest.TestCase):
         self.assertEqual(len(walking_hazard.analyze(self.frame(partial))), 1)
         invalid = detection("vehicle", [0, 0, float("inf"), 440])
         self.assertEqual(walking_hazard.analyze(self.frame(invalid)), [])
+
+    def test_stairs_only_announced_when_forward(self):
+        """계단은 전방(정면 또는 점자블록 위)에 위치할 때만 안내되고, 좌/우측 계단은 스킵되는지 검증"""
+        # 1. 전방 중앙 계단 -> 안내 정상 발생
+        forward_stairs = detection("stairs", [280, 250, 360, 440], object_id=1, distance=1.8)
+        res_forward = walking_hazard.analyze(self.frame(forward_stairs))
+        self.assertEqual(len(res_forward), 1)
+        self.assertEqual(res_forward[0]["message"], "전방 계단")
+
+        # 2. 좌측 계단 -> 스킵되어 결과 없음
+        left_stairs = detection("stairs", [20, 250, 100, 440], object_id=2, distance=1.8)
+        res_left = walking_hazard.analyze(self.frame(left_stairs))
+        self.assertEqual(len(res_left), 0)
+
+        # 3. 우측 계단 -> 스킵되어 결과 없음
+        right_stairs = detection("stairs", [520, 250, 600, 440], object_id=3, distance=1.8)
+        res_right = walking_hazard.analyze(self.frame(right_stairs))
+        self.assertEqual(len(res_right), 0)
 
 
 if __name__ == "__main__":

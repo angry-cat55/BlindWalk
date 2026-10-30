@@ -9,7 +9,7 @@ CLASS_POLICY = {
     "bollard": ("볼라드", "CAUTION"),
     "pole": ("기둥", "CAUTION"),
     "tree_trunk": ("가로수", "CAUTION"),
-    "bicycle": ("자전거", "CAUTION"),
+    "bicycle": ("이륜차", "CAUTION"),
     "movable_signage": ("적재물", "CAUTION"),
 }
 
@@ -108,6 +108,10 @@ def analyze(frame_data):
                 location = "우측"
             else:
                 location = "전방"
+
+        # 계단은 보행 진행 전방에 위치할 때만 안내 (좌/우측 계단 스킵)
+        if obj.class_name == "stairs" and location not in ("전방", "점자블록 위"):
+            continue
 
         label, priority = CLASS_POLICY[obj.class_name]
         results.append({
