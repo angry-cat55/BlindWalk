@@ -96,12 +96,8 @@ class UsbHapticManager(private val context: Context) {
         }
     }
 
-    fun vibrateForSelectedFeedback(
-        selected: FeedbackResult,
-        detections: List<Recognition>,
-        frameWidth: Int = 640
-    ) {
-        if (selected.priority == FeedbackPriority.INFO) return
+    fun vibrateForSelectedFeedback(selected: FeedbackResult, detections: List<Recognition>, frameWidth: Int = 640): String {
+        // 시연 촬영을 위해 INFO(사람, 점자블록) 포함 모든 안내에서 좌/우/정면 햅틱 작동
 
         val targetObj = detections.firstOrNull { it.id == selected.objectId && it.bbox.size == 4 }
         val cmd = if (targetObj != null) {
@@ -121,6 +117,7 @@ class UsbHapticManager(private val context: Context) {
 
         pendingCmd = cmd
         sendRawCommand(cmd)
+        return cmd
     }
 
     fun triggerPreparedPulse() {

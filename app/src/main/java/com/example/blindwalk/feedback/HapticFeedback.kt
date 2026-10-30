@@ -24,8 +24,8 @@ class HapticFeedback(context: Context) {
         externalHaptic.triggerPreparedPulse()
     }
 
-    fun vibrateDirectional(selected: FeedbackResult, detections: List<Recognition>) {
-        externalHaptic.vibrateForSelectedFeedback(selected, detections)
+    fun vibrateDirectional(selected: FeedbackResult, detections: List<Recognition>): String {
+        return externalHaptic.vibrateForSelectedFeedback(selected, detections)
     }
 
     fun close() {

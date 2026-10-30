@@ -177,7 +177,13 @@ def analyze(frame_data):
         elif _overlaps(foot, [forward_polygon]):
             location = "전방에"
         else:
-            continue
+            cx = (obj.bbox[0] + obj.bbox[2]) / 2.0
+            if cx < width / 3.0:
+                location = "좌측"
+            elif cx > width * 2.0 / 3.0:
+                location = "우측"
+            else:
+                location = "전방"
 
         label, priority = CLASS_POLICY[obj.class_name]
         results.append({
