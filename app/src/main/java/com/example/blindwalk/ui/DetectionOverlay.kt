@@ -1,5 +1,6 @@
 package com.example.blindwalk.ui
 
+import android.graphics.Bitmap
 import android.graphics.Paint
 import androidx.compose.foundation.Canvas
 import androidx.compose.runtime.Composable
@@ -9,18 +10,37 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.blindwalk.inference.Recognition
 
 // 검출 표시는 시각 보조용이다. 음성은 기존 공통 안내 결과에서 선택한다.
 @Composable
-fun DetectionOverlay(objects: List<Recognition>, selectedId: Int?, modifier: Modifier = Modifier) {
+fun DetectionOverlay(
+    objects: List<Recognition>,
+    selectedId: Int?,
+    modifier: Modifier = Modifier,
+    frameBitmap: Bitmap? = null,
+) {
     Canvas(modifier.clearAndSetSemantics {}) {
         val transform = OverlayTransform.fit(size.width, size.height)
+
+        frameBitmap?.let { bmp ->
+            if (!bmp.isRecycled) {
+                drawImage(
+                    image = bmp.asImageBitmap(),
+                    dstOffset = IntOffset(transform.left.toInt(), transform.top.toInt()),
+                    dstSize = IntSize((640f * transform.scale).toInt(), (480f * transform.scale).toInt()),
+                )
+            }
+        }
+
         val green = Color(0xFF9CF2C7)
         val amber = Color(0xFFFFD27B)
         val text = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -56,7 +76,8 @@ fun DetectionOverlay(objects: List<Recognition>, selectedId: Int?, modifier: Mod
             drawRoundRect(color, Offset(left, top), Size(right - left, bottom - top),
                 CornerRadius(6.dp.toPx()), style = Stroke((if (selected) 3f else 1.5f).dp.toPx()))
 
-            val label = koreanLabel(obj.className) + if (selected) " · 안내 대상" else ""
+            val distanceText = obj.distanceM?.let { " · %.1fm".format(it) } ?: ""
+            val label = koreanLabel(obj.className) + distanceText + if (selected) " · 안내 대상" else ""
             val pad = 7.dp.toPx()
             val width = text.measureText(label) + pad * 2
             val height = text.fontMetrics.run { descent - ascent } + pad

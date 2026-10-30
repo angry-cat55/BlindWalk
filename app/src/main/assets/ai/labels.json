@@ -1,23 +1,16 @@
 {
-  "sha256": "f847f727d9121a7fa5001d25ca8401564be3716596339a5fff92854b5c5a8318",
+  "sha256": "ba3ea4ec34ea01ea8751178089f38a03a87163c634fdbfacdc72b271f0bedad7",
   "labels": [
     "tactile_line",
     "tactile_dot",
     "stairs",
-    "curb",
+    "elevator",
     "crosswalk",
     "bollard",
-    "pole",
-    "tree_trunk",
-    "bicycle",
     "movable_signage",
-    "vehicle",
-    "person",
-    "traffic_light",
     "facility",
-    "overhang",
-    "elevator",
-    "elevator_sign",
-    "toilet_sign"
+    "bicycle",
+    "vehicle",
+    "person"
   ]
 }

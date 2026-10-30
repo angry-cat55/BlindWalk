@@ -24,7 +24,7 @@ import kotlin.math.*
 // 모델 실행은 단일 분석 스레드에서만 한다. Python에는 예측 결과만 전달한다.
 class MobileInferenceEngine(context: Context, preferGpu: Boolean = true) : AutoCloseable {
     private val environment = OrtEnvironment.getEnvironment()
-    private val modelBuffer = direct(context.assets.open("ai/yolo11n_seg_18cls.tflite").use { it.readBytes() })
+    private val modelBuffer = direct(context.assets.open("ai/yolo11s_seg_11cls.tflite").use { it.readBytes() })
     private var gpuDelegate: GpuDelegate? = null
     var yoloBackend: String = "CPU"
         private set
@@ -35,7 +35,7 @@ class MobileInferenceEngine(context: Context, preferGpu: Boolean = true) : AutoC
         .let { names -> List(names.length()) { names.getString(it) } }
     private val decoder = YoloDecoder(labels)
     private val yoloInput = ByteBuffer.allocateDirect(3 * 640 * 640 * 4).order(ByteOrder.nativeOrder())
-    private val boxes = ByteBuffer.allocateDirect(54 * 8400 * 4).order(ByteOrder.nativeOrder())
+    private val boxes = ByteBuffer.allocateDirect(47 * 8400 * 4).order(ByteOrder.nativeOrder())
     private val masks = ByteBuffer.allocateDirect(32 * 160 * 160 * 4).order(ByteOrder.nativeOrder())
     private val canvasBitmap = Bitmap.createBitmap(640, 640, Bitmap.Config.ARGB_8888)
     private val paint = Paint(Paint.FILTER_BITMAP_FLAG)
@@ -45,9 +45,9 @@ class MobileInferenceEngine(context: Context, preferGpu: Boolean = true) : AutoC
             // README 설명 대신 실제 모델의 NCHW shape와 자료형을 검증한다.
             check(yolo.getInputTensor(0).shape().contentEquals(intArrayOf(1, 3, 640, 640)))
             check(yolo.getInputTensor(0).dataType() == DataType.FLOAT32)
-            check(yolo.getOutputTensor(0).shape().contentEquals(intArrayOf(1, 54, 8400)))
+            check(yolo.getOutputTensor(0).shape().contentEquals(intArrayOf(1, 47, 8400)))
             check(yolo.getOutputTensor(1).shape().contentEquals(intArrayOf(1, 32, 160, 160)))
-            check(labels.size == 18)
+            check(labels.size == 11)
             val digest = MessageDigest.getInstance("SHA-256")
             digest.update(modelBuffer.asReadOnlyBuffer().apply { rewind() })
             val fingerprint = digest.digest().joinToString("") { "%02x".format(it) }
