@@ -210,7 +210,7 @@ fun CameraScreen() {
     }
     LaunchedEffect(announcementAt) {
         if (announcementAt > 0) {
-            delay(3_000)
+            delay(2_000)
             announcement = null
         }
     }
@@ -309,15 +309,16 @@ fun CameraScreen() {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom,
                 horizontalArrangement = Arrangement.spacedBy(18.dp)) {
                 val current = announcement
-                if (current != null && running) {
-                    Surface(Modifier.weight(1f), shape = RoundedCornerShape(16.dp), color = Ink.copy(alpha = .94f)) {
-                        Column(Modifier.padding(horizontal = 22.dp, vertical = 16.dp)) {
+                if (current != null && (running || videoRunning)) {
+                    Surface(Modifier.weight(1f), shape = RoundedCornerShape(16.dp), color = Ink.copy(alpha = .92f)) {
+                        Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
                             Text(when (current.priority) {
-                                FeedbackPriority.INFO -> "주변 안내"
-                                FeedbackPriority.CAUTION -> "보행 주의"
-                                FeedbackPriority.URGENT -> "위험 주의"
-                            }, color = if (current.priority == FeedbackPriority.INFO) Mint else Color(0xFFFFD27B), fontSize = 15.sp)
-                            Text(current.message, color = Color.White, fontSize = 30.sp, fontWeight = FontWeight.Bold)
+                                FeedbackPriority.INFO -> "ℹ️ 주변 안내"
+                                FeedbackPriority.CAUTION -> "⚠️ 보행 주의"
+                                FeedbackPriority.URGENT -> "🚨 위험 경고"
+                            }, color = if (current.priority == FeedbackPriority.INFO) Mint else Color(0xFFFFD27B), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                            Spacer(Modifier.height(2.dp))
+                            Text(current.message, color = Color.White, fontSize = 19.sp, fontWeight = FontWeight.Bold, maxLines = 2)
                         }
                     }
                 } else Spacer(Modifier.weight(1f))

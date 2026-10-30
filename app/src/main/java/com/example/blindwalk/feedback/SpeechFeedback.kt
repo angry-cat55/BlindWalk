@@ -38,9 +38,16 @@ class SpeechFeedback(context: Context) {
     fun speak(message: String = "보행 보조 서비스 음성 안내 테스트입니다."): Boolean {
         if (!ready || closed || message.isBlank()) return false
 
+        // TTS 발화 시 이모지(유니코드 기호)와 대괄호 등 불필요한 시각 기호는 제거하여 자연스러운 음성만 출력한다.
+        val spoken = message
+            .replace(Regex("[\\p{So}\\p{Cn}\\[\\]·]"), " ")
+            .replace(Regex("\\s+"), " ")
+            .trim()
+        if (spoken.isBlank()) return false
+
         val id = "feedback-${sequence.incrementAndGet()}"
         activeUtterance.set(id)
-        val accepted = tts?.speak(message, TextToSpeech.QUEUE_FLUSH, null, id) == TextToSpeech.SUCCESS
+        val accepted = tts?.speak(spoken, TextToSpeech.QUEUE_FLUSH, null, id) == TextToSpeech.SUCCESS
         if (!accepted) activeUtterance.compareAndSet(id, null)
         return accepted
     }

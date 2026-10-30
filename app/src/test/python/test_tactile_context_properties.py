@@ -31,7 +31,7 @@ class TactileContextPropertiesTest(unittest.TestCase):
                                          round(rng.uniform(0.1, 6.0), 4))))
                     for i in range(10)]
             eligible = [d for d in dots if d.distance_m is not None
-                        and math.isfinite(d.distance_m) and 0 <= d.distance_m <= 5
+                        and math.isfinite(d.distance_m) and 0 <= d.distance_m <= tactile_context.MAX_VALID_DISTANCE_M
                         and width / 3 <= d.bbox[0] + 2 <= width * 2 / 3]
             # 동률의 우선순위는 미정이므로 최소 거리의 후보 집합과 비교한다.
             nearest = min((d.distance_m for d in eligible), default=None)

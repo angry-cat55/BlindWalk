@@ -48,23 +48,23 @@ class TactileContextScenarioTest(unittest.TestCase):
         self.assertEqual(len(self.analyze(self.dot(distance=1.0), now=103.1)), 1)
 
     def test_same_tracked_dot_approaching_remains_suppressed(self):
-        self.analyze(self.dot(distance=4.0))
+        self.analyze(self.dot(distance=1.8))
         result = self.analyze(self.dot(bbox=[280, 380, 360, 460], distance=1.0), now=101.0)
         self.assertEqual(result, [])
 
     def test_adding_neighbor_to_announced_cluster_does_not_repeat(self):
-        original = self.dot(1, [290, 250, 320, 280], 2.5)
+        original = self.dot(1, [290, 250, 320, 280], 1.8)
         self.analyze(original)
-        neighbor = self.dot(2, [320, 250, 350, 280], 2.0)
+        neighbor = self.dot(2, [320, 250, 350, 280], 1.5)
         self.assertEqual(self.analyze(original, neighbor, now=101.0), [])
         result = self.analyze(original, neighbor, now=103.1)
         self.assertEqual(result[0]["object_id"], 2)
 
     def test_beyond_five_meter_frame_does_not_delay_first_valid_announcement(self):
-        self.assertEqual(self.analyze(self.dot(distance=5.1)), [])
-        result = self.analyze(self.dot(distance=5.0), now=100.2)
+        self.assertEqual(self.analyze(self.dot(distance=2.5)), [])
+        result = self.analyze(self.dot(distance=2.0), now=100.2)
         self.assertEqual(len(result), 1)
-        self.assertIn("5.0m", result[0]["message"])
+        self.assertIn("2.0m", result[0]["message"])
 
     def test_side_dot_entering_middle_third_is_announced(self):
         self.assertEqual(self.analyze(self.dot(bbox=[150, 280, 190, 320])), [])
@@ -73,7 +73,7 @@ class TactileContextScenarioTest(unittest.TestCase):
 
     def test_current_behavior_new_closer_dot_is_also_suppressed(self):
         # 정책 미확정: 이전 점형이 남아 있어도 새 구역이 같은 범주면 억제되는 현상을 기록한다.
-        old = self.dot(1, [290, 40, 350, 80], 4.0)
+        old = self.dot(1, [290, 40, 350, 80], 1.8)
         new = self.dot(2, [290, 390, 350, 430], 1.0)
         self.assertEqual(self.analyze(old)[0]["object_id"], 1)
         self.assertEqual(self.analyze(old, new, now=101.0), [])

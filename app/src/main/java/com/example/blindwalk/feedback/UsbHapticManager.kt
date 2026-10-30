@@ -117,7 +117,7 @@ class UsbHapticManager(private val context: Context) {
 
         pendingCmd = cmd
         sendRawCommand(cmd)
-        return when(cmd) { "L" -> "[◀ 좌측 햅틱] "; "R" -> "[▶ 우측 햅틱] "; else -> "[▲ 정면 햅틱] " }
+        return when(cmd) { "L" -> "👈 [좌측] "; "R" -> "👉 [우측] "; else -> "👆 [정면] " }
     }
 
     fun triggerPreparedPulse() {

@@ -17,9 +17,9 @@ from typing import List, Dict, Any, Optional, Set
 from detection import Detection
 
 
-# 안내 유효 거리 기준 (미터) - 최대 5.0m
+# 안내 유효 거리 기준 (미터) - 최대 2.0m
 MIN_VALID_DISTANCE_M = 0.0
-MAX_VALID_DISTANCE_M = 5.0
+MAX_VALID_DISTANCE_M = 2.0
 
 # 동일 지점/클러스터 중복 안내 방지 쿨다운 시간 (초)
 COOLDOWN_SECONDS = 3.0

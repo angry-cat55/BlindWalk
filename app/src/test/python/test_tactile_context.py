@@ -34,18 +34,18 @@ class TactileContextTest(unittest.TestCase):
         self.assertEqual(tactile_context.analyze({"objects": [dot]}), [])
 
     def test_distance_filtering_5m(self):
-        """유효거리 5.0m 기준: 5.0m 이하는 유효, 5.0m 초과는 무시 검증"""
+        """유효거리 2.0m 기준: 2.0m 이하는 유효, 2.0m 초과는 무시 검증"""
         foot_line = Detection(id=1, class_name="tactile_line", confidence=0.95, distance_m=0.8, bbox=[280, 320, 360, 480])
 
-        # 4.5m 거리의 점형 블록 (5.0m 이내 -> 유효)
-        dot_within = Detection(id=2, class_name="tactile_dot", confidence=0.9, distance_m=4.5, bbox=[280, 270, 360, 325])
+        # 1.8m 거리의 점형 블록 (2.0m 이내 -> 유효)
+        dot_within = Detection(id=2, class_name="tactile_dot", confidence=0.9, distance_m=1.8, bbox=[280, 270, 360, 325])
         res_within = tactile_context.analyze({"objects": [foot_line, dot_within]})
         self.assertEqual(len(res_within), 1)
         self.assertIn("정지선", res_within[0]["message"])
-        self.assertIn("4.5m", res_within[0]["message"])
+        self.assertIn("1.8m", res_within[0]["message"])
 
-        # 5.5m 거리의 점형 블록 (5.0m 초과 -> 무시)
-        dot_far = Detection(id=3, class_name="tactile_dot", confidence=0.9, distance_m=5.5, bbox=[280, 270, 360, 325])
+        # 2.5m 거리의 점형 블록 (2.0m 초과 -> 무시)
+        dot_far = Detection(id=3, class_name="tactile_dot", confidence=0.9, distance_m=2.5, bbox=[280, 270, 360, 325])
         res_far = tactile_context.analyze({"objects": [foot_line, dot_far]})
         self.assertEqual(res_far, [])
 
@@ -107,8 +107,8 @@ class TactileContextTest(unittest.TestCase):
 
     def test_result_schema_conformance(self):
         """반환 결과가 docs/situation-handoff.md 공통 4대 키를 엄격히 준수하는지 검증"""
-        dot = Detection(id=5, class_name="tactile_dot", confidence=0.95, distance_m=3.0, bbox=[280, 280, 360, 340])
-        stairs = Detection(id=50, class_name="stairs", confidence=0.9, distance_m=3.5, bbox=[250, 150, 390, 300])
+        dot = Detection(id=5, class_name="tactile_dot", confidence=0.95, distance_m=1.8, bbox=[280, 280, 360, 340])
+        stairs = Detection(id=50, class_name="stairs", confidence=0.9, distance_m=1.9, bbox=[250, 150, 390, 300])
 
         results = tactile_context.analyze({"objects": [dot, stairs]})
         self.assertEqual(len(results), 1)
@@ -134,9 +134,9 @@ class TactileContextTest(unittest.TestCase):
         """
         foot_line = Detection(id=1, class_name="tactile_line", confidence=0.9, distance_m=1.0, bbox=[280, 320, 360, 480])
         # 블록 A(id=10)와 블록 B(id=11) 연접
-        dot_a = Detection(id=10, class_name="tactile_dot", confidence=0.9, distance_m=2.5, bbox=[280, 240, 320, 280])
-        dot_b = Detection(id=11, class_name="tactile_dot", confidence=0.9, distance_m=2.4, bbox=[320, 240, 360, 280])
-        left_line = Detection(id=20, class_name="tactile_line", confidence=0.9, distance_m=2.5, bbox=[160, 250, 280, 290])
+        dot_a = Detection(id=10, class_name="tactile_dot", confidence=0.9, distance_m=1.8, bbox=[280, 240, 320, 280])
+        dot_b = Detection(id=11, class_name="tactile_dot", confidence=0.9, distance_m=1.7, bbox=[320, 240, 360, 280])
+        left_line = Detection(id=20, class_name="tactile_line", confidence=0.9, distance_m=1.8, bbox=[160, 250, 280, 290])
 
         # 프레임 1 (t=100.0): 블록 A와 B가 모두 있어 클러스터 [A, B]로 1회 안내 발화
         frame1 = {
@@ -157,7 +157,7 @@ class TactileContextTest(unittest.TestCase):
         self.assertEqual(res2, [])
 
         # 프레임 3 (t=104.0, 4초 뒤 쿨다운 경과): 새로운 블록 C(id=30)가 나타났을 때는 정상 안내
-        dot_c = Detection(id=30, class_name="tactile_dot", confidence=0.9, distance_m=3.0, bbox=[280, 240, 360, 280])
+        dot_c = Detection(id=30, class_name="tactile_dot", confidence=0.9, distance_m=1.9, bbox=[280, 240, 360, 280])
         frame3 = {
             "timestamp": 104.5,
             "objects": [foot_line, dot_c, left_line]
@@ -171,15 +171,15 @@ class TactileContextTest(unittest.TestCase):
         for y in (0, 220, 440):
             with self.subTest(y=y):
                 tactile_context.reset_state()
-                dot = Detection(1, "tactile_dot", 0.9, 2.0, [290, y, 350, y + 40])
+                dot = Detection(1, "tactile_dot", 0.9, 1.8, [290, y, 350, y + 40])
                 result = tactile_context.analyze({"objects": [dot]})
                 self.assertEqual(result[0]["object_id"], 1)
                 self.assertIn("점형블록", result[0]["message"])
                 self.assertNotIn("경로 종료", result[0]["message"])
 
     def test_nearest_in_middle_third_wins_over_center_and_sides(self):
-        center = Detection(1, "tactile_dot", 0.9, 4.0, [300, 40, 340, 80])
-        nearer = Detection(2, "tactile_dot", 0.9, 2.0, [220, 200, 260, 240])
+        center = Detection(1, "tactile_dot", 0.9, 1.9, [300, 40, 340, 80])
+        nearer = Detection(2, "tactile_dot", 0.9, 1.2, [220, 200, 260, 240])
         left = Detection(3, "tactile_dot", 0.9, 0.5, [30, 350, 70, 390])
         right = Detection(4, "tactile_dot", 0.9, 0.4, [550, 350, 590, 390])
         result = tactile_context.analyze({"objects": [center, left, right, nearer]})
@@ -188,13 +188,13 @@ class TactileContextTest(unittest.TestCase):
 
     def test_disconnected_dot_wins_over_farther_connected_dot(self):
         line = Detection(1, "tactile_line", 0.9, 1.0, [300, 300, 340, 480])
-        connected = Detection(2, "tactile_dot", 0.9, 4.0, [290, 240, 350, 290])
-        disconnected = Detection(3, "tactile_dot", 0.9, 2.0, [220, 20, 260, 60])
+        connected = Detection(2, "tactile_dot", 0.9, 1.9, [290, 240, 350, 290])
+        disconnected = Detection(3, "tactile_dot", 0.9, 1.2, [220, 20, 260, 60])
         result = tactile_context.analyze({"objects": [line, connected, disconnected]})
         self.assertEqual(result[0]["object_id"], 3)
 
     def test_five_meter_boundary_without_line(self):
-        for distance, count in ((5.0, 1), (5.01, 0)):
+        for distance, count in ((2.0, 1), (2.01, 0)):
             with self.subTest(distance=distance):
                 tactile_context.reset_state()
                 dot = Detection(1, "tactile_dot", 0.9, distance, [280, 80, 360, 120])
