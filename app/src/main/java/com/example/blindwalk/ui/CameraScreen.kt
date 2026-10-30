@@ -53,7 +53,7 @@ fun CameraScreen() {
     var selectedId by remember { mutableStateOf<Int?>(null) }
     var announcement by remember { mutableStateOf<FeedbackResult?>(null) }
     var announcementAt by remember { mutableLongStateOf(0L) }
-    var hapticDir by remember { mutableStateOf<String?>(null) }
+    var hapticDir by remember { mutableStateOf("C") }
 
     // 화면의 음성 엔진은 유지하고, 일시정지 시 공통 안내의 세션 기록만 초기화한다.
     val speech = remember { SpeechFeedback(context) }
